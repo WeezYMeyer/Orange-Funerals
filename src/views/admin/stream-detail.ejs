@@ -1,0 +1,58 @@
+<%
+let noticeHtml = null;
+if (notice === "already-sent") {
+  noticeHtml = "Thank-you emails were already sent for this stream — nothing sent again.";
+} else if (notice && notice.startsWith("thanks-sent-")) {
+  const [ , , sent, failed, skipped ] = notice.split("-");
+  noticeHtml = `Stream ended. Thank-you emails: ${sent} sent, ${failed} failed, ${skipped} skipped (opted out).`;
+} else if (notice && notice.startsWith("email-error-")) {
+  noticeHtml = "Stream ended, but sending thank-you emails failed: " + decodeURIComponent(notice.replace("email-error-", "")) + " — check your Brevo API key in .env.";
+}
+%>
+<%- include("../partials/admin-head", { title: stream.title }) %>
+<%- include("../partials/admin-nav") %>
+
+<div class="container">
+  <h1><%= stream.title %></h1>
+
+  <% if (noticeHtml) { %>
+    <div class="notice-box"><%= noticeHtml %></div>
+  <% } %>
+
+  <div class="panel">
+    <label style="margin-top:0;">Public link — send this to family or post it wherever people will find it</label>
+    <div class="link-box"><a href="<%= publicUrl %>" target="_blank"><%= publicUrl %></a></div>
+
+    <label>Status</label>
+    <% if (stream.ended_at) { %>
+      <p><span class="tag ended">Ended <%= new Date(stream.ended_at + "Z").toLocaleString() %></span></p>
+    <% } else { %>
+      <p><span class="tag live">Live / Open</span></p>
+      <form method="post" action="/admin/streams/<%= stream.slug %>/end" onsubmit="return confirm('End this stream and send thank-you emails to everyone who watched?');">
+        <button class="btn danger" type="submit">End Stream &amp; Send Thank-You Emails</button>
+      </form>
+    <% } %>
+  </div>
+
+  <div class="panel">
+    <h2 style="margin-top:0; font-size:18px;">Viewers who entered their email (<%= viewers.length %>)</h2>
+    <% if (viewers.length === 0) { %>
+      <p class="help">No one has entered their email for this stream yet.</p>
+    <% } else { %>
+      <table>
+        <thead><tr><th>Email</th><th>Name</th><th>Joined</th></tr></thead>
+        <tbody>
+          <% viewers.forEach(v => { %>
+            <tr>
+              <td><%= v.email %></td>
+              <td><%= v.name || "—" %></td>
+              <td><%= new Date(v.created_at + "Z").toLocaleString() %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    <% } %>
+  </div>
+</div>
+</body>
+</html>

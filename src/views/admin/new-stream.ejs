@@ -1,0 +1,28 @@
+<%- include("../partials/admin-head", { title: "New Livestream" }) %>
+<%- include("../partials/admin-nav") %>
+
+<div class="container narrow">
+  <h1>New Livestream</h1>
+  <p class="help">Set up YoloBox → YoloLive as normal, then copy the embed code YoloLive gives you and paste it below. This automatically creates the public streaming page — email gate, video, and live chat — with its own link.</p>
+
+  <div class="panel">
+    <% if (error) { %>
+      <div class="error-box"><%= error %></div>
+    <% } %>
+    <form method="post" action="/admin/streams/new">
+      <label for="title">Title (shown to viewers, e.g. "Service for John Smith")</label>
+      <input type="text" id="title" name="title" required autofocus value="<%= form.title || '' %>" />
+
+      <label for="serviceDate">Service date (optional)</label>
+      <input type="date" id="serviceDate" name="serviceDate" value="<%= form.serviceDate || '' %>" />
+
+      <label for="embedCode">YoloLive embed code</label>
+      <textarea id="embedCode" name="embedCode" required placeholder="<iframe src=&quot;https://...&quot; ...></iframe>"><%= form.embedCode || '' %></textarea>
+      <p class="help">Paste the full snippet YoloLive gives you for this stream, exactly as copied.</p>
+
+      <button class="btn" type="submit">Create Livestream Page</button>
+    </form>
+  </div>
+</div>
+</body>
+</html>

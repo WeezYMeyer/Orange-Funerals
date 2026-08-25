@@ -1,0 +1,27 @@
+<%- include("../partials/admin-head", { title: "Broadcast Email" }) %>
+<%- include("../partials/admin-nav") %>
+
+<div class="container narrow">
+  <h1>Broadcast Email</h1>
+  <p class="help">Sends to everyone who has ever entered their email to watch a stream (<%= contactCount %> people currently subscribed, opt-outs excluded automatically).</p>
+
+  <div class="panel">
+    <% if (error) { %>
+      <div class="error-box"><%= error %></div>
+    <% } %>
+    <% if (sentSummary) { %>
+      <div class="notice-box">Sent to <%= sentSummary.sent %> of <%= sentSummary.total %> contacts<% if (sentSummary.failed) { %>, <%= sentSummary.failed %> failed<% } %>.</div>
+    <% } %>
+    <form method="post" action="/admin/broadcast">
+      <label for="subjectLine">Subject</label>
+      <input type="text" id="subjectLine" name="subjectLine" required value="<%= form.subjectLine || '' %>" />
+
+      <label for="message">Message</label>
+      <textarea id="message" name="message" required placeholder="Write your message. Leave a blank line between paragraphs."><%= form.message || '' %></textarea>
+
+      <button class="btn" type="submit" onclick="return confirm('Send this email to all subscribed contacts?');">Send Broadcast</button>
+    </form>
+  </div>
+</div>
+</body>
+</html>

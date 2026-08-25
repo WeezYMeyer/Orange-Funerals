@@ -1,0 +1,48 @@
+<%- include("../partials/admin-head", { title: "Streams" }) %>
+<%- include("../partials/admin-nav") %>
+
+<div class="container">
+  <div style="display:flex; justify-content: space-between; align-items: baseline;">
+    <h1>Livestreams</h1>
+    <a class="btn" href="/admin/streams/new">+ New Livestream</a>
+  </div>
+
+  <% if (streams.length === 0) { %>
+    <div class="panel">
+      <p>No livestreams yet. Click <strong>New Livestream</strong>, paste in the YoloLive embed code, and a page + link will be created automatically.</p>
+    </div>
+  <% } else { %>
+    <div class="panel">
+      <table>
+        <thead>
+          <tr>
+            <th>Title</th>
+            <th>Status</th>
+            <th>Viewers</th>
+            <th>Created</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <% streams.forEach(s => { %>
+            <tr>
+              <td><%= s.title %></td>
+              <td>
+                <% if (s.ended_at) { %>
+                  <span class="tag ended">Ended</span>
+                <% } else { %>
+                  <span class="tag live">Live / Open</span>
+                <% } %>
+              </td>
+              <td><%= s.viewer_count %></td>
+              <td><%= new Date(s.created_at + "Z").toLocaleDateString() %></td>
+              <td><a href="/admin/streams/<%= s.slug %>">Manage →</a></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</div>
+</body>
+</html>

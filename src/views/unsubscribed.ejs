@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Unsubscribed</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div class="container narrow" style="text-align:center; padding-top:100px;">
+    <% if (found) { %>
+      <h1>You've been unsubscribed</h1>
+      <p class="help">You won't receive any further emails from us. If this was a mistake, please contact the funeral home directly.</p>
+    <% } else { %>
+      <h1>Link not recognized</h1>
+      <p class="help">This unsubscribe link isn't valid. If you'd like to stop receiving emails, please contact the funeral home directly.</p>
+    <% } %>
+  </div>
+</body>
+</html>

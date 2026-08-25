@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title><%= stream.title %></title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+
+<div class="watch-hero">
+  <h1><%= stream.title %></h1>
+  <% if (stream.service_date) { %>
+    <div class="subtitle"><%= new Date(stream.service_date).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" }) %></div>
+  <% } %>
+  <% if (stream.ended_at) { %>
+    <div class="subtitle" style="margin-top:6px;">This livestream has ended. Thank you for being with us.</div>
+  <% } %>
+</div>
+
+<div class="container">
+  <% if (!unlocked) { %>
+    <div class="gate-panel">
+      <p>Please enter your name and email to join this livestream. We'll use your email only to confirm you watched and to keep you informed — you can unsubscribe at any time.</p>
+      <% if (error) { %>
+        <div class="error-box"><%= error %></div>
+      <% } %>
+      <form method="post" action="/watch/<%= stream.slug %>">
+        <label for="name">Name</label>
+        <input type="text" id="name" name="name" value="<%= formValues.name || '' %>" autofocus />
+
+        <label for="email">Email</label>
+        <input type="email" id="email" name="email" required value="<%= formValues.email || '' %>" />
+
+        <button class="btn" type="submit" style="width:100%;">Join Livestream</button>
+      </form>
+    </div>
+  <% } else { %>
+    <div class="stream-layout">
+      <div class="video-wrap">
+        <%- stream.embed_code %>
+      </div>
+      <div class="chat-wrap">
+        <div class="chat-header">Live Chat</div>
+        <div class="chat-messages" id="chat-messages"></div>
+        <form class="chat-form" id="chat-form">
+          <input type="text" id="chat-input" placeholder="Say something…" maxlength="500" autocomplete="off" />
+          <button type="submit">Send</button>
+        </form>
+      </div>
+    </div>
+  <% } %>
+</div>
+
+<footer class="site-footer">
+  Every email we send includes a link to unsubscribe at any time.
+</footer>
+
+<% if (unlocked) { %>
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    window.__STREAM_SLUG__ = <%- JSON.stringify(stream.slug) %>;
+    window.__VIEWER_NAME__ = <%- JSON.stringify(viewerName || "Guest") %>;
+  </script>
+  <script src="/js/chat.js"></script>
+<% } %>
+
+</body>
+</html>
