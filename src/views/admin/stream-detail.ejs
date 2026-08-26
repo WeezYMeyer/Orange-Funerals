@@ -4,16 +4,38 @@ if (notice === "already-sent") {
   noticeHtml = "Thank-you emails were already sent for this stream — nothing sent again.";
 } else if (notice && notice.startsWith("thanks-sent-")) {
   const [ , , sent, failed, skipped ] = notice.split("-");
-  noticeHtml = `Stream ended. Thank-you emails: ${sent} sent, ${failed} failed, ${skipped} skipped (opted out).`;
+  noticeHtml = `Thank-you emails: ${sent} sent, ${failed} failed, ${skipped} skipped (opted out).`;
 } else if (notice && notice.startsWith("email-error-")) {
-  noticeHtml = "Stream ended, but sending thank-you emails failed: " + decodeURIComponent(notice.replace("email-error-", "")) + " — check your Brevo API key in .env.";
+  noticeHtml = "Sending thank-you emails failed: " + decodeURIComponent(notice.replace("email-error-", "")) + " — check your Everlytic settings in .env.";
+} else if (notice === "updated") {
+  noticeHtml = "Stream details updated. The public link is unchanged.";
 }
+
+function fmtScheduled(dateStr) {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  if (isNaN(d)) return null;
+  const hasTime = /T\d{2}:\d{2}/.test(dateStr);
+  return hasTime
+    ? d.toLocaleString(undefined, { year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })
+    : d.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
+}
+const scheduled = fmtScheduled(stream.service_date);
 %>
 <%- include("../partials/admin-head", { title: stream.title }) %>
 <%- include("../partials/admin-nav") %>
 
 <div class="container">
-  <h1><%= stream.title %></h1>
+  <div style="display:flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap;">
+    <h1 style="margin-bottom:4px;"><%= stream.title %></h1>
+    <div>
+      <a class="btn secondary" href="/admin/streams/<%= stream.slug %>/edit">Edit</a>
+    </div>
+  </div>
+  <p class="help" style="margin-top:0;">
+    Loaded by <strong><%= stream.creator_name || "—" %></strong>
+    <% if (scheduled) { %> · Scheduled for <strong><%= scheduled %></strong><% } %>
+  </p>
 
   <% if (noticeHtml) { %>
     <div class="notice-box"><%= noticeHtml %></div>
@@ -31,6 +53,27 @@ if (notice === "already-sent") {
       <form method="post" action="/admin/streams/<%= stream.slug %>/end" onsubmit="return confirm('End this stream and send thank-you emails to everyone who watched?');">
         <button class="btn danger" type="submit">End Stream &amp; Send Thank-You Emails</button>
       </form>
+    <% } %>
+
+    <% if (stream.ended_at) { %>
+      <label>Thank-you emails</label>
+      <p>
+        <% if (status === "sent") { %>
+          <span class="tag email-sent">Sent to everyone who watched</span>
+        <% } else if (status === "no-viewers") { %>
+          <span class="tag">No viewers to email</span>
+        <% } else if (status === "partial") { %>
+          <span class="tag email-partial">Partially sent</span>
+        <% } else { %>
+          <span class="tag email-failed">Not sent</span>
+        <% } %>
+      </p>
+      <% if (status === "partial" || status === "failed") { %>
+        <form method="post" action="/admin/streams/<%= stream.slug %>/resend-thanks">
+          <button class="btn secondary" type="submit">Retry Sending</button>
+        </form>
+        <p class="help">Only retries people who haven't successfully received it yet — safe to click again.</p>
+      <% } %>
     <% } %>
   </div>
 
@@ -52,6 +95,14 @@ if (notice === "already-sent") {
         </tbody>
       </table>
     <% } %>
+  </div>
+
+  <div class="panel">
+    <h2 style="margin-top:0; font-size:18px;">Delete this stream</h2>
+    <p class="help">Permanently removes the page, its link, the viewer list, and the chat history. This can't be undone — do this only if the stream was created by mistake or is no longer needed.</p>
+    <form method="post" action="/admin/streams/<%= stream.slug %>/delete" onsubmit="return confirm('Permanently delete &quot;<%= stream.title.replace(/&quot;/g, '') %>&quot;? This cannot be undone.');">
+      <button class="btn danger" type="submit">Delete Stream</button>
+    </form>
   </div>
 </div>
 </body>

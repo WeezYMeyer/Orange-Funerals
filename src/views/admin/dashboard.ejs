@@ -1,3 +1,18 @@
+<%
+function fmtScheduled(s) {
+  if (!s.service_date) return "—";
+  const d = new Date(s.service_date);
+  if (isNaN(d)) return "—";
+  // A plain "YYYY-MM-DD" (no time) parses to midnight UTC — detect that case
+  // and show date-only rather than a misleading "00:00".
+  const hasTime = /T\d{2}:\d{2}/.test(s.service_date);
+  return hasTime
+    ? d.toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+    : d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+}
+const otherSort = sort === "desc" ? "asc" : "desc";
+const noticeText = notice === "deleted" ? "Stream deleted." : null;
+%>
 <%- include("../partials/admin-head", { title: "Streams" }) %>
 <%- include("../partials/admin-nav") %>
 
@@ -7,9 +22,22 @@
     <a class="btn" href="/admin/streams/new">+ New Livestream</a>
   </div>
 
+  <% if (noticeText) { %>
+    <div class="notice-box"><%= noticeText %></div>
+  <% } %>
+
+  <div class="tabs">
+    <a class="tab <%= tab === 'upcoming' ? 'active' : '' %>" href="/admin?tab=upcoming">Upcoming</a>
+    <a class="tab <%= tab === 'past' ? 'active' : '' %>" href="/admin?tab=past">Past</a>
+  </div>
+
   <% if (streams.length === 0) { %>
     <div class="panel">
-      <p>No livestreams yet. Click <strong>New Livestream</strong>, paste in the YoloLive embed code, and a page + link will be created automatically.</p>
+      <% if (tab === "upcoming") { %>
+        <p>Nothing upcoming right now. Click <strong>New Livestream</strong>, paste in the YoloLive embed code, and a page + link will be created automatically.</p>
+      <% } else { %>
+        <p>No past streams yet.</p>
+      <% } %>
     </div>
   <% } else { %>
     <div class="panel">
@@ -17,9 +45,11 @@
         <thead>
           <tr>
             <th>Title</th>
+            <th><a class="sort-link" href="/admin?tab=<%= tab %>&sort=<%= otherSort %>">Scheduled <%= sort === "desc" ? "↓" : "↑" %></a></th>
             <th>Status</th>
+            <th>Emails</th>
             <th>Viewers</th>
-            <th>Created</th>
+            <th>Loaded by</th>
             <th></th>
           </tr>
         </thead>
@@ -27,6 +57,7 @@
           <% streams.forEach(s => { %>
             <tr>
               <td><%= s.title %></td>
+              <td><%= fmtScheduled(s) %></td>
               <td>
                 <% if (s.ended_at) { %>
                   <span class="tag ended">Ended</span>
@@ -34,8 +65,21 @@
                   <span class="tag live">Live / Open</span>
                 <% } %>
               </td>
+              <td>
+                <% if (s.status === "not-ended") { %>
+                  <span class="tag">—</span>
+                <% } else if (s.status === "no-viewers") { %>
+                  <span class="tag">No viewers</span>
+                <% } else if (s.status === "sent") { %>
+                  <span class="tag email-sent">Sent</span>
+                <% } else if (s.status === "partial") { %>
+                  <span class="tag email-partial">Partial</span>
+                <% } else { %>
+                  <span class="tag email-failed">Not sent</span>
+                <% } %>
+              </td>
               <td><%= s.viewer_count %></td>
-              <td><%= new Date(s.created_at + "Z").toLocaleDateString() %></td>
+              <td><%= s.creator_name || "—" %></td>
               <td><a href="/admin/streams/<%= s.slug %>">Manage →</a></td>
             </tr>
           <% }) %>

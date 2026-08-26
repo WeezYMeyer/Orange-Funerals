@@ -4,24 +4,38 @@ const { thankYouEmail, broadcastEmail } = require("./emailTemplates");
 
 /**
  * Send the "thank you for watching" email to every contact who watched a
- * given stream. Safe to call more than once — it only actually sends once
- * (guarded by streams.thanks_sent_at) and skips anyone who has opted out.
+ * given stream. Safe to call more than once: contacts who already have a
+ * successful send logged are skipped, so re-running this (e.g. via the
+ * "Resend" button after a partial failure) only retries the people who
+ * didn't get one yet, never double-emails someone who already did.
  * Returns a summary of what happened.
  */
 async function sendThankYouEmails(streamId) {
   const stream = db.prepare("SELECT * FROM streams WHERE id = ?").get(streamId);
   if (!stream) throw new Error("Stream not found");
-  if (stream.thanks_sent_at) {
-    return { alreadySent: true, sent: 0, skipped: 0, failed: 0 };
-  }
 
-  const contacts = db
+  const alreadySucceeded = new Set(
+    db
+      .prepare(
+        `SELECT contact_id FROM email_logs WHERE stream_id = ? AND kind = 'thank_you' AND status = 'sent'`
+      )
+      .all(streamId)
+      .map((r) => r.contact_id)
+  );
+
+  const allContacts = db
     .prepare(
       `SELECT c.* FROM contacts c
        JOIN stream_views sv ON sv.contact_id = c.id
        WHERE sv.stream_id = ?`
     )
     .all(streamId);
+
+  if (stream.thanks_sent_at && allContacts.every((c) => alreadySucceeded.has(c.id))) {
+    return { alreadySent: true, sent: 0, skipped: 0, failed: 0, total: allContacts.length };
+  }
+
+  const contacts = allContacts.filter((c) => !alreadySucceeded.has(c.id));
 
   const logInsert = db.prepare(
     `INSERT INTO email_logs (contact_id, stream_id, kind, subject, status) VALUES (?, ?, 'thank_you', ?, ?)`
@@ -54,7 +68,7 @@ async function sendThankYouEmails(streamId) {
   }
 
   db.prepare("UPDATE streams SET thanks_sent_at = datetime('now') WHERE id = ?").run(streamId);
-  return { alreadySent: false, sent, skipped, failed, total: contacts.length };
+  return { alreadySent: false, sent, skipped, failed, total: allContacts.length };
 }
 
 /**

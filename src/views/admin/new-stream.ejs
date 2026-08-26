@@ -13,8 +13,9 @@
       <label for="title">Title (shown to viewers, e.g. "Service for John Smith")</label>
       <input type="text" id="title" name="title" required autofocus value="<%= form.title || '' %>" />
 
-      <label for="serviceDate">Service date (optional)</label>
-      <input type="date" id="serviceDate" name="serviceDate" value="<%= form.serviceDate || '' %>" />
+      <label for="serviceDate">Service date &amp; time (optional)</label>
+      <input type="datetime-local" id="serviceDate" name="serviceDate" value="<%= form.serviceDate || '' %>" />
+      <p class="help">Shows up in the dashboard so you can see what's coming up and sort by it.</p>
 
       <label for="embedCode">YoloLive embed code</label>
       <textarea id="embedCode" name="embedCode" required placeholder="<iframe src=&quot;https://...&quot; ...></iframe>"><%= form.embedCode || '' %></textarea>
