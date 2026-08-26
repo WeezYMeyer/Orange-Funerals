@@ -49,6 +49,14 @@ router.post("/logout", (req, res) => {
 
 router.use(requireStaff);
 
+// Makes the current path available to every admin view without having to
+// thread it through each individual res.render() call — used by
+// admin-nav.ejs to highlight which nav link is active.
+router.use((req, res, next) => {
+  res.locals.currentPath = req.path;
+  next();
+});
+
 // --- Dashboard ---
 // Two tabs: "Upcoming" (default — anything not yet ended, i.e. still to
 // happen or currently live) and "Past" (ended streams, for looking

@@ -1,12 +1,21 @@
+<%
+const path = typeof currentPath !== "undefined" ? currentPath : "";
+const isStreams = path === "/" || (path.startsWith("/streams/") && path !== "/streams/new");
+const isNew = path === "/streams/new";
+const isBroadcast = path === "/broadcast";
+%>
 <div class="topbar">
   <div class="topbar-inner">
-    <div class="brand">Funeral Streams · Admin</div>
+    <a class="brand" href="/admin">
+      <span class="mark"><svg width="10" height="14" viewBox="0 0 10 14" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M5 0C5 0 6.7 2.3 6.7 3.5C6.7 4.4 5.9 5.1 5 5.1C4.1 5.1 3.3 4.4 3.3 3.5C3.3 2.3 5 0 5 0Z" fill="#b6924f"/><rect x="2.8" y="5.6" width="4.4" height="7.9" rx="0.8" fill="#faf8f5" stroke="#cddac2"/></svg></span>
+      Funeral Streams · Admin
+    </a>
     <nav>
-      <a href="/admin">Streams</a>
-      <a href="/admin/streams/new">New Livestream</a>
-      <a href="/admin/broadcast">Broadcast Email</a>
+      <a href="/admin" class="<%= isStreams ? 'current' : '' %>">Streams</a>
+      <a href="/admin/streams/new" class="<%= isNew ? 'current' : '' %>">New Livestream</a>
+      <a href="/admin/broadcast" class="<%= isBroadcast ? 'current' : '' %>">Broadcast Email</a>
       <form method="post" action="/admin/logout" style="display:inline">
-        <button type="submit" style="background:none;border:none;color:#2b2b2b;cursor:pointer;font-size:14px;margin-left:18px;padding:0;font-family:inherit;">Log out</button>
+        <button type="submit" class="logout-btn">Log out</button>
       </form>
     </nav>
   </div>

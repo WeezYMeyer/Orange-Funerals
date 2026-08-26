@@ -32,7 +32,7 @@ const noticeText = notice === "deleted" ? "Stream deleted." : null;
   </div>
 
   <% if (streams.length === 0) { %>
-    <div class="panel">
+    <div class="panel empty-state">
       <% if (tab === "upcoming") { %>
         <p>Nothing upcoming right now. Click <strong>New Livestream</strong>, paste in the YoloLive embed code, and a page + link will be created automatically.</p>
       <% } else { %>

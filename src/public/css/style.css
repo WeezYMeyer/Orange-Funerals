@@ -1,32 +1,84 @@
+/* ==========================================================================
+   Funeral Streams — stylesheet
+   Palette kept as-is (cream + sage green): refined type, spacing, states,
+   and a bulletproof fix for the embedded player not resizing with the
+   window (see "Video / embed" section below).
+   ========================================================================== */
+
 :root {
   --ink: #2b2b2b;
+  --ink-soft: #4a4a48;
   --muted: #6b6b6b;
+  --muted-soft: #8a8781;
   --line: #e0ddd6;
+  --line-soft: #ece9e2;
   --paper: #faf8f5;
   --panel: #ffffff;
   --accent: #5b6b5b; /* muted sage green */
   --accent-dark: #46543f;
+  --accent-soft: #eef2ea;
+  --accent-line: #cddac2;
+  --gold: #b6924f; /* whisper accent — used only for the "live" pulse */
   --danger: #8a3b3b;
-  --radius: 6px;
+  --danger-soft: #fbeaea;
+  --danger-line: #e3b8b8;
+  --warning: #8a6d1f;
+  --warning-soft: #fbf2d9;
+  --warning-line: #ecdba0;
+
+  --radius: 8px;
+  --radius-lg: 14px;
+  --shadow-sm: 0 1px 2px rgba(43, 43, 43, 0.04), 0 1px 1px rgba(43, 43, 43, 0.03);
+  --shadow-md: 0 8px 24px -12px rgba(43, 43, 43, 0.18), 0 2px 6px rgba(43, 43, 43, 0.05);
+  --shadow-focus: 0 0 0 3px rgba(91, 107, 91, 0.22);
+
+  --serif: "Fraunces", Georgia, "Times New Roman", serif;
+  --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
 }
 
 * { box-sizing: border-box; }
 
+html { -webkit-text-size-adjust: 100%; }
+
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  font-family: var(--sans);
   background: var(--paper);
   color: var(--ink);
-  line-height: 1.55;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
 }
 
 h1, h2, h3 {
-  font-family: Georgia, "Times New Roman", serif;
-  font-weight: normal;
+  font-family: var(--serif);
+  font-weight: 500;
   color: var(--ink);
+  letter-spacing: -0.01em;
 }
 
+h1 { font-size: 28px; line-height: 1.25; margin: 0 0 6px; }
+h2 { font-size: 19px; line-height: 1.3; }
+
+p { margin: 0 0 12px; }
+
 a { color: var(--accent-dark); }
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+.btn:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+  border-radius: var(--radius);
+}
+
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background: var(--line-soft);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 0.92em;
+}
 
 .container {
   max-width: 880px;
@@ -42,6 +94,9 @@ a { color: var(--accent-dark); }
 .topbar {
   border-bottom: 1px solid var(--line);
   background: var(--panel);
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 .topbar-inner {
   max-width: 880px;
@@ -50,26 +105,72 @@ a { color: var(--accent-dark); }
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
 }
 .topbar-inner .brand {
-  font-family: Georgia, serif;
+  font-family: var(--serif);
   font-size: 18px;
-}
-.topbar-inner nav a {
-  margin-left: 18px;
-  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 9px;
   color: var(--ink);
-  font-size: 14px;
+  text-decoration: none;
 }
-.topbar-inner nav a:hover { color: var(--accent-dark); }
+.topbar-inner .brand .mark {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-line);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+.topbar-inner .brand .mark svg { display: block; }
+
+.topbar-inner nav {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.topbar-inner nav a,
+.topbar-inner nav .logout-btn {
+  margin-left: 4px;
+  text-decoration: none;
+  color: var(--ink-soft);
+  font-size: 14px;
+  padding: 7px 10px;
+  border-radius: var(--radius);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.topbar-inner nav a:hover,
+.topbar-inner nav .logout-btn:hover {
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+}
+.topbar-inner nav a.current {
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+  font-weight: 600;
+}
+.topbar-inner nav .logout-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+}
 
 /* --- Cards / panels --- */
 .panel {
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 24px;
+  border-radius: var(--radius-lg);
+  padding: 26px;
   margin-bottom: 20px;
+  box-shadow: var(--shadow-sm);
 }
 
 table {
@@ -79,10 +180,19 @@ table {
 }
 th, td {
   text-align: left;
-  padding: 10px 8px;
+  padding: 12px 10px;
+  border-bottom: 1px solid var(--line-soft);
+}
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover { background: var(--paper); }
+th {
+  color: var(--muted-soft);
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
   border-bottom: 1px solid var(--line);
 }
-th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
 
 /* --- Forms --- */
 label {
@@ -90,7 +200,8 @@ label {
   font-size: 13px;
   color: var(--muted);
   margin-bottom: 6px;
-  margin-top: 16px;
+  margin-top: 18px;
+  font-weight: 500;
 }
 label:first-child { margin-top: 0; }
 
@@ -98,57 +209,71 @@ input[type="text"],
 input[type="email"],
 input[type="password"],
 input[type="date"],
+input[type="datetime-local"],
 textarea {
   width: 100%;
-  padding: 10px 12px;
+  padding: 11px 13px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   font-size: 15px;
   font-family: inherit;
   background: #fff;
   color: var(--ink);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 textarea { min-height: 140px; resize: vertical; }
 input:focus, textarea:focus {
   outline: none;
   border-color: var(--accent);
+  box-shadow: var(--shadow-focus);
 }
+input::placeholder, textarea::placeholder { color: var(--muted-soft); }
 
 .btn {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   background: var(--accent);
   color: #fff;
   border: none;
   padding: 11px 20px;
   border-radius: var(--radius);
   font-size: 15px;
+  font-family: inherit;
   cursor: pointer;
   text-decoration: none;
   margin-top: 20px;
+  transition: background 0.15s ease, transform 0.05s ease, box-shadow 0.15s ease;
+  box-shadow: var(--shadow-sm);
 }
 .btn:hover { background: var(--accent-dark); }
+.btn:active { transform: translateY(1px); }
 .btn.secondary {
   background: transparent;
   color: var(--ink);
   border: 1px solid var(--line);
+  box-shadow: none;
 }
+.btn.secondary:hover { background: var(--paper); border-color: var(--muted-soft); }
 .btn.danger { background: var(--danger); }
+.btn.danger:hover { background: #6f2f2f; }
+.btn-block { display: flex; width: 100%; justify-content: center; }
 
-.help { color: var(--muted); font-size: 13px; margin-top: 6px; }
+.help { color: var(--muted); font-size: 13.5px; margin-top: 6px; }
 .error-box {
-  background: #fbeaea;
-  border: 1px solid #e3b8b8;
+  background: var(--danger-soft);
+  border: 1px solid var(--danger-line);
   color: var(--danger);
-  padding: 12px 16px;
+  padding: 13px 16px;
   border-radius: var(--radius);
   font-size: 14px;
   margin-bottom: 16px;
 }
 .notice-box {
-  background: #eef2ea;
-  border: 1px solid #cddac2;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-line);
   color: var(--accent-dark);
-  padding: 12px 16px;
+  padding: 13px 16px;
   border-radius: var(--radius);
   font-size: 14px;
   margin-bottom: 16px;
@@ -156,47 +281,77 @@ input:focus, textarea:focus {
 
 .link-box {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   align-items: center;
-  background: #f2f0ea;
+  background: var(--paper);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: 10px 12px;
-  font-family: monospace;
+  padding: 11px 13px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 13px;
   word-break: break-all;
 }
 
+/* --- Tags / status pills --- */
 .tag {
-  display: inline-block;
-  font-size: 11px;
-  padding: 2px 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 4px 10px 4px 8px;
   border-radius: 999px;
-  background: #eee;
+  background: var(--line-soft);
   color: var(--muted);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
 }
-.tag.live { background: #eef2ea; color: var(--accent-dark); }
-.tag.ended { background: #efece6; color: var(--muted); }
+.tag::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.6;
+  flex: none;
+}
+.tag.live {
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+  animation: pulse-tag 2.4s ease-in-out infinite;
+}
+.tag.live::before { background: var(--gold); opacity: 1; }
+.tag.ended { background: var(--line-soft); color: var(--muted); }
 .tag.email-sent { background: #e5f3e5; color: #2e6b2e; }
-.tag.email-partial { background: #fbf2d9; color: #8a6d1f; }
-.tag.email-failed { background: #fbeaea; color: var(--danger); }
+.tag.email-partial { background: var(--warning-soft); color: var(--warning); }
+.tag.email-failed { background: var(--danger-soft); color: var(--danger); }
+
+@keyframes pulse-tag {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(182, 146, 79, 0.25); }
+  50% { box-shadow: 0 0 0 4px rgba(182, 146, 79, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tag.live { animation: none; }
+}
 
 /* --- Tabs (dashboard) --- */
 .tabs {
   display: flex;
   gap: 4px;
   border-bottom: 1px solid var(--line);
-  margin: 20px 0 0;
+  margin: 22px 0 0;
 }
 .tab {
   display: inline-block;
-  padding: 8px 16px;
+  padding: 9px 16px;
   text-decoration: none;
   color: var(--muted);
   font-size: 14px;
   border-bottom: 2px solid transparent;
   margin-bottom: -1px;
+  transition: color 0.15s ease, border-color 0.15s ease;
 }
+.tab:hover { color: var(--accent-dark); }
 .tab.active {
   color: var(--accent-dark);
   border-bottom-color: var(--accent);
@@ -205,51 +360,102 @@ input:focus, textarea:focus {
 .sort-link {
   color: inherit;
   text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 .sort-link:hover { color: var(--accent-dark); }
+
+.empty-state {
+  text-align: center;
+  padding: 48px 20px;
+  color: var(--muted);
+}
+.empty-state p { margin: 0; font-size: 14.5px; }
 
 /* --- Public watch page --- */
 .watch-hero {
   text-align: center;
-  padding: 40px 20px 10px;
+  padding: 56px 20px 16px;
+  background: linear-gradient(180deg, var(--accent-soft) 0%, var(--paper) 100%);
+  border-bottom: 1px solid var(--line-soft);
+}
+.watch-hero .eyebrow {
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent-dark);
+  opacity: 0.8;
+  margin-bottom: 10px;
 }
 .watch-hero h1 {
-  font-size: 26px;
-  margin-bottom: 4px;
+  font-size: 30px;
+  margin-bottom: 6px;
 }
 .watch-hero .subtitle {
   color: var(--muted);
-  font-size: 14px;
+  font-size: 14.5px;
 }
 
 .gate-panel {
-  max-width: 420px;
-  margin: 24px auto;
+  max-width: 440px;
+  margin: 32px auto;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 28px;
+  border-radius: var(--radius-lg);
+  padding: 32px;
   text-align: left;
+  box-shadow: var(--shadow-md);
 }
-.gate-panel p { font-size: 14px; color: var(--muted); }
+.gate-panel p { font-size: 14.5px; color: var(--muted); }
 
 .stream-layout {
   display: flex;
   gap: 20px;
   align-items: flex-start;
   flex-wrap: wrap;
+  padding-top: 28px;
 }
+
+/* Video / embed
+   -------------------------------------------------------------------------
+   The pasted YoloLive snippet often carries its own width/height
+   attributes (and sometimes an inline style) sized for a fixed 640x360
+   box, which is what stopped the player from resizing with the window.
+   Fixed-pixel intrinsic sizes on the iframe don't get overridden just by
+   giving the wrapper a percentage width. This forces the child to fill
+   the wrapper regardless of whatever dimensions the embed code shipped
+   with:
+     - the wrapper owns the aspect ratio and is fluid (width: 100%)
+     - the iframe/embed/video is pinned to the wrapper with
+       position: absolute + inset: 0
+     - width/height/position are all !important, which beats both the
+       iframe's width="640" attribute AND an inline style="" if the embed
+       snippet includes one — a plain `width: 100%` rule would lose to an
+       inline style, this doesn't.
+   No JS is required for this to stay responsive; it recalculates on every
+   resize because it's plain CSS. */
 .video-wrap {
+  position: relative;
   flex: 2 1 480px;
+  width: 100%;
   background: #000;
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   overflow: hidden;
   aspect-ratio: 16 / 9;
+  box-shadow: var(--shadow-md);
 }
-.video-wrap iframe, .video-wrap embed, .video-wrap video {
-  width: 100%;
-  height: 100%;
-  border: 0;
+.video-wrap iframe,
+.video-wrap embed,
+.video-wrap video,
+.video-wrap object {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  max-height: none !important;
+  border: 0 !important;
   display: block;
 }
 
@@ -257,56 +463,87 @@ input:focus, textarea:focus {
   flex: 1 1 280px;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   display: flex;
   flex-direction: column;
   height: 480px;
+  box-shadow: var(--shadow-sm);
 }
 .chat-header {
-  padding: 10px 14px;
+  padding: 12px 16px;
   border-bottom: 1px solid var(--line);
   font-size: 13px;
   color: var(--muted);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.chat-header::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
 }
 .chat-messages {
   flex: 1;
   overflow-y: auto;
-  padding: 12px 14px;
-  font-size: 13px;
+  padding: 14px 16px;
+  font-size: 13.5px;
 }
-.chat-message { margin-bottom: 10px; }
+.chat-message { margin-bottom: 12px; line-height: 1.5; }
 .chat-message .name { font-weight: 600; color: var(--accent-dark); }
 .chat-form {
   display: flex;
   border-top: 1px solid var(--line);
-  padding: 8px;
+  padding: 10px;
   gap: 8px;
 }
 .chat-form input {
   flex: 1;
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: 8px 10px;
-  font-size: 13px;
+  padding: 9px 12px;
+  font-size: 13.5px;
+  font-family: inherit;
+}
+.chat-form input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--shadow-focus);
 }
 .chat-form button {
   background: var(--accent);
   color: #fff;
   border: none;
   border-radius: var(--radius);
-  padding: 8px 14px;
+  padding: 9px 16px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 13.5px;
+  font-family: inherit;
+  transition: background 0.15s ease;
 }
+.chat-form button:hover { background: var(--accent-dark); }
 
 footer.site-footer {
   text-align: center;
-  color: var(--muted);
-  font-size: 12px;
-  margin-top: 40px;
+  color: var(--muted-soft);
+  font-size: 12.5px;
+  margin: 48px 0 24px;
 }
 
 @media (max-width: 640px) {
   .stream-layout { flex-direction: column; }
-  .chat-wrap { height: 360px; width: 100%; }
+  /* .video-wrap's flex-basis (480px) is a MAIN-axis size, and the main
+     axis becomes vertical once the layout stacks — left alone, that
+     480px basis fights the 16:9 aspect-ratio and the player renders
+     too tall. Reset it to auto so height is driven by aspect-ratio only. */
+  .video-wrap { flex: 0 0 auto; width: 100%; }
+  .chat-wrap { flex: 0 0 auto; height: 360px; width: 100%; }
+  .watch-hero { padding: 40px 16px 14px; }
+  .watch-hero h1 { font-size: 24px; }
+  .panel { padding: 20px; }
+  .gate-panel { padding: 24px; margin: 20px auto; }
+  .container { padding: 24px 16px 60px; }
 }

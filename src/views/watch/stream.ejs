@@ -4,11 +4,15 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title><%= stream.title %></title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/css/style.css" />
 </head>
 <body>
 
 <div class="watch-hero">
+  <div class="eyebrow">In Loving Memory</div>
   <h1><%= stream.title %></h1>
   <% if (stream.service_date) { %>
     <div class="subtitle"><%= new Date(stream.service_date).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" }) %></div>
@@ -32,7 +36,7 @@
         <label for="email">Email</label>
         <input type="email" id="email" name="email" required value="<%= formValues.email || '' %>" />
 
-        <button class="btn" type="submit" style="width:100%;">Join Livestream</button>
+        <button class="btn btn-block" type="submit">Join Livestream</button>
       </form>
     </div>
   <% } else { %>
