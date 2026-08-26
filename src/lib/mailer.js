@@ -40,7 +40,7 @@ async function sendEmail({ to, subject, html }) {
   }
 
   const fromAddress = process.env.EMAIL_FROM_ADDRESS;
-  const fromName = process.env.EMAIL_FROM_NAME || "Funeral Streams";
+  const fromName = process.env.EMAIL_FROM_NAME || "Orange Funeral";
 
   try {
     const res = await fetch(`${baseUrl.replace(/\/$/, "")}/api/2.0/trans_mails`, {

@@ -22,7 +22,7 @@
   <% } %>
 </div>
 
-<div class="container">
+<div class="container <%= unlocked ? 'wide' : '' %>">
   <% if (!unlocked) { %>
     <div class="gate-panel">
       <p>Please enter your name and email to join this livestream. We'll use your email only to confirm you watched and to keep you informed — you can unsubscribe at any time.</p>

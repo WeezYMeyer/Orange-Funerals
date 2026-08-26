@@ -7,7 +7,7 @@ function wrapper({ heading, bodyHtml, unsubToken }) {
     </div>
     <div style="font-size: 15px;">${bodyHtml}</div>
     <div style="margin-top: 40px; padding-top: 16px; border-top: 1px solid #ddd; font-size: 12px; color: #888;">
-      ${process.env.EMAIL_FROM_NAME || "Funeral Streams"}<br/>
+      ${process.env.EMAIL_FROM_NAME || "Orange Funeral"}<br/>
       <a href="${base}/unsubscribe/${unsubToken}" style="color: #888;">Unsubscribe from future emails</a>
     </div>
   </div>`;

@@ -1,7 +1,7 @@
 {
-  "name": "funeral-streams",
+  "name": "orange-funeral-livestream",
   "version": "1.0.0",
-  "description": "Livestream platform for funeral services: email-gated stream pages, live chat, and thank-you / broadcast emails.",
+  "description": "Orange Funeral — Live Stream Link Creation: email-gated stream pages, live chat, and thank-you / broadcast emails.",
   "main": "src/server.js",
   "type": "commonjs",
   "scripts": {

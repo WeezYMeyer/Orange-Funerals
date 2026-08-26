@@ -1,4 +1,4 @@
-# Funeral Streams Platform
+# Orange Funeral — Live Stream Link Creation
 
 A small, self-contained web app for streaming funeral services:
 

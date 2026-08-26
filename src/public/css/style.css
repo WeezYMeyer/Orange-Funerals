@@ -90,6 +90,13 @@ code {
   max-width: 460px;
 }
 
+/* The watch page's video+chat layout uses this wider default so it fills
+   more of the browser window instead of sitting in a narrow centered
+   column with unused space on either side — see .stream-layout below. */
+.container.wide {
+  max-width: 1360px;
+}
+
 /* --- Top bar (admin) --- */
 .topbar {
   border-bottom: 1px solid var(--line);
@@ -109,11 +116,9 @@ code {
   flex-wrap: wrap;
 }
 .topbar-inner .brand {
-  font-family: var(--serif);
-  font-size: 18px;
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 10px;
   color: var(--ink);
   text-decoration: none;
 }
@@ -129,6 +134,24 @@ code {
   flex: none;
 }
 .topbar-inner .brand .mark svg { display: block; }
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+.brand-name {
+  font-family: var(--serif);
+  font-size: 16px;
+  color: var(--ink);
+}
+.brand-tag {
+  font-family: var(--sans);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted-soft);
+}
 
 .topbar-inner nav {
   display: flex;
@@ -412,7 +435,7 @@ input::placeholder, textarea::placeholder { color: var(--muted-soft); }
 .stream-layout {
   display: flex;
   gap: 20px;
-  align-items: flex-start;
+  align-items: stretch; /* chat-wrap grows to match the video's rendered height */
   flex-wrap: wrap;
   padding-top: 28px;
 }
@@ -437,7 +460,7 @@ input::placeholder, textarea::placeholder { color: var(--muted-soft); }
    resize because it's plain CSS. */
 .video-wrap {
   position: relative;
-  flex: 2 1 480px;
+  flex: 2 1 640px;
   width: 100%;
   background: #000;
   border-radius: var(--radius-lg);
@@ -460,13 +483,13 @@ input::placeholder, textarea::placeholder { color: var(--muted-soft); }
 }
 
 .chat-wrap {
-  flex: 1 1 280px;
+  flex: 1 1 340px;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   display: flex;
   flex-direction: column;
-  height: 480px;
+  min-height: 480px; /* height itself comes from stretching to match .video-wrap */
   box-shadow: var(--shadow-sm);
 }
 .chat-header {
