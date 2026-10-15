@@ -116,8 +116,15 @@ async function sendViaEverlytic({ to, subject, html }) {
  * @returns {Promise<{ok: boolean, error?: string}>}
  */
 async function sendEmail(opts) {
-  if (process.env.BREVO_API_KEY) return sendViaBrevo(opts);
-  return sendViaEverlytic(opts);
+  const provider = process.env.BREVO_API_KEY ? "Brevo" : "Everlytic";
+  const result = provider === "Brevo" ? await sendViaBrevo(opts) : await sendViaEverlytic(opts);
+  // Show every send in Render's Logs so failures are easy to diagnose.
+  if (result.ok) {
+    console.log(`[email] sent via ${provider} to ${opts.to && opts.to.email}`);
+  } else {
+    console.error(`[email] FAILED via ${provider} to ${opts.to && opts.to.email}: ${result.error}`);
+  }
+  return result;
 }
 
 module.exports = { sendEmail };
