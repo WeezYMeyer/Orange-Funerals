@@ -1,33 +1,71 @@
-// Thin wrapper around Everlytic's transactional email API.
-// Docs: https://help.everlytic.com/knowledgebase/send-a-transactional-email/
-//       https://help.everlytic.com/knowledgebase/authentication/
+// Sends email through Brevo or Everlytic.
 //
-// Everlytic is multi-tenant — every account has its own base URL (the domain
-// of your Everlytic installation), so unlike most email APIs there's a
-// EVERLYTIC_BASE_URL to set, not just a key.
+// Which one is used:
+//   - BREVO_API_KEY set      -> Brevo   (https://developers.brevo.com/reference/sendtransacemail)
+//   - otherwise              -> Everlytic (original code, unchanged)
+// To switch back to Everlytic later, just remove BREVO_API_KEY in Render.
 //
-// A note on accuracy: Everlytic's public docs show the request fields
-// (headers/body/attachments/options) but not a single copy-pasteable JSON
-// example — the example below is built from their field descriptions. The
-// first real send is worth checking closely (see README "Verifying your
-// Everlytic setup") in case a field name needs a small tweak once you're
-// looking at your own account's docs/support.
+// Both use HTTPS APIs, not SMTP, so they work on Render's free tier
+// (Render blocks outbound SMTP ports on free instances).
 
 const fetch = require("node-fetch");
 
-function authHeader() {
-  const username = process.env.EVERLYTIC_USERNAME;
-  const apiKey = process.env.EVERLYTIC_API_KEY;
-  const token = Buffer.from(`${username}:${apiKey}`).toString("base64");
+function fromDetails() {
+  return {
+    address: process.env.EMAIL_FROM_ADDRESS,
+    name: process.env.EMAIL_FROM_NAME || "Orange Funeral",
+  };
+}
+
+// ---------------------------------------------------------------- Brevo
+
+async function sendViaBrevo({ to, subject, html }) {
+  const apiKey = process.env.BREVO_API_KEY;
+  const from = fromDetails();
+
+  if (!from.address) {
+    return { ok: false, error: "EMAIL_FROM_ADDRESS is not set (must be a sender verified in Brevo)" };
+  }
+
+  const recipient = { email: to.email };
+  if (to.name) recipient.name = to.name;
+
+  try {
+    const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+      method: "POST",
+      headers: {
+        "api-key": apiKey,
+        "content-type": "application/json",
+        accept: "application/json",
+      },
+      body: JSON.stringify({
+        sender: { email: from.address, name: from.name },
+        to: [recipient],
+        subject,
+        htmlContent: html,
+      }),
+    });
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      return { ok: false, error: `Brevo API ${res.status}: ${body}` };
+    }
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: `Brevo: ${err.message}` };
+  }
+}
+
+// ------------------------------------------------------------ Everlytic
+
+function everlyticAuthHeader() {
+  const token = Buffer.from(
+    `${process.env.EVERLYTIC_USERNAME}:${process.env.EVERLYTIC_API_KEY}`
+  ).toString("base64");
   return `Basic ${token}`;
 }
 
-/**
- * Send one email via Everlytic.
- * @param {{to: {email: string, name?: string}, subject: string, html: string}} opts
- * @returns {Promise<{ok: boolean, error?: string}>}
- */
-async function sendEmail({ to, subject, html }) {
+async function sendViaEverlytic({ to, subject, html }) {
   const baseUrl = process.env.EVERLYTIC_BASE_URL;
   const username = process.env.EVERLYTIC_USERNAME;
   const apiKey = process.env.EVERLYTIC_API_KEY;
@@ -35,24 +73,23 @@ async function sendEmail({ to, subject, html }) {
   if (!baseUrl || !username || !apiKey || apiKey === "your-everlytic-api-key") {
     return {
       ok: false,
-      error: "EVERLYTIC_BASE_URL / EVERLYTIC_USERNAME / EVERLYTIC_API_KEY are not configured in .env",
+      error: "No email service configured: set BREVO_API_KEY, or EVERLYTIC_BASE_URL / EVERLYTIC_USERNAME / EVERLYTIC_API_KEY",
     };
   }
 
-  const fromAddress = process.env.EMAIL_FROM_ADDRESS;
-  const fromName = process.env.EMAIL_FROM_NAME || "Orange Funeral";
+  const from = fromDetails();
 
   try {
     const res = await fetch(`${baseUrl.replace(/\/$/, "")}/api/2.0/trans_mails`, {
       method: "POST",
       headers: {
-        Authorization: authHeader(),
+        Authorization: everlyticAuthHeader(),
         "content-type": "application/json",
         accept: "application/json",
       },
       body: JSON.stringify({
         headers: {
-          from: { [fromAddress]: fromName },
+          from: { [from.address]: from.name },
           to: { [to.email]: to.name || to.email },
           subject,
         },
@@ -67,8 +104,20 @@ async function sendEmail({ to, subject, html }) {
     }
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: err.message };
+    return { ok: false, error: `Everlytic: ${err.message}` };
   }
+}
+
+// ---------------------------------------------------------------- public
+
+/**
+ * Send one email.
+ * @param {{to: {email: string, name?: string}, subject: string, html: string}} opts
+ * @returns {Promise<{ok: boolean, error?: string}>}
+ */
+async function sendEmail(opts) {
+  if (process.env.BREVO_API_KEY) return sendViaBrevo(opts);
+  return sendViaEverlytic(opts);
 }
 
 module.exports = { sendEmail };
