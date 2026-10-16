@@ -119,6 +119,7 @@ router.use(requireStaff);
 // admin-nav.ejs to highlight which nav link is active.
 router.use((req, res, next) => {
   res.locals.currentPath = req.path;
+  res.locals.signedInName = req.session.staffName;
   next();
 });
 
@@ -532,6 +533,70 @@ router.get("/calendar", (req, res) => {
     today: monthKey === todayKey ? now.getDate() : null,
     total: streams.length,
   });
+});
+
+// --- Staff logins ---
+// Each person gets their own login, so "Loaded by" on streams and
+// "Prepared by" on quotes/invoices show who actually did it.
+
+router.get("/staff", (req, res) => {
+  const staff = db.prepare("SELECT id, name, email, created_at FROM staff ORDER BY name").all();
+  res.render("admin/staff", {
+    staff,
+    meId: req.session.staffId,
+    adminEmail: (process.env.ADMIN_EMAIL || "").trim().toLowerCase(),
+    error: req.query.error || null,
+    notice: req.query.notice || null,
+  });
+});
+
+router.post("/staff", (req, res) => {
+  const name = String(req.body.name || "").trim();
+  const email = String(req.body.email || "").trim().toLowerCase();
+  const password = String(req.body.password || "");
+  if (!name || !email || password.length < 8) {
+    return res.redirect("/admin/staff?error=" + encodeURIComponent("Enter a name, email and a password of at least 8 characters."));
+  }
+  if (db.prepare("SELECT 1 FROM staff WHERE email = ?").get(email)) {
+    return res.redirect("/admin/staff?error=" + encodeURIComponent("There's already a login with that email."));
+  }
+  db.prepare("INSERT INTO staff (name, email, password_hash) VALUES (?, ?, ?)").run(name, email, bcrypt.hashSync(password, 12));
+  res.redirect("/admin/staff?notice=added");
+});
+
+router.post("/staff/:id/name", (req, res) => {
+  const name = String(req.body.name || "").trim();
+  const id = parseInt(req.params.id, 10);
+  if (name) {
+    db.prepare("UPDATE staff SET name = ? WHERE id = ?").run(name, id);
+    if (id === req.session.staffId) req.session.staffName = name;
+  }
+  res.redirect("/admin/staff?notice=renamed");
+});
+
+router.post("/staff/:id/password", (req, res) => {
+  const password = String(req.body.password || "");
+  if (password.length < 8) {
+    return res.redirect("/admin/staff?error=" + encodeURIComponent("Passwords need at least 8 characters."));
+  }
+  db.prepare("UPDATE staff SET password_hash = ? WHERE id = ?").run(bcrypt.hashSync(password, 12), parseInt(req.params.id, 10));
+  res.redirect("/admin/staff?notice=password");
+});
+
+router.post("/staff/:id/remove", (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (id === req.session.staffId) {
+    return res.redirect("/admin/staff?error=" + encodeURIComponent("You can't remove the login you're signed in with."));
+  }
+  // Keep their name on things they created, but stop the login working.
+  const used =
+    db.prepare("SELECT 1 FROM streams WHERE created_by = ? UNION SELECT 1 FROM documents WHERE prepared_by = ?").get(id, id);
+  if (used) {
+    db.prepare("UPDATE staff SET password_hash = '!', email = email || '.removed.' || id WHERE id = ?").run(id);
+  } else {
+    db.prepare("DELETE FROM staff WHERE id = ?").run(id);
+  }
+  res.redirect("/admin/staff?notice=removed");
 });
 
 // --- Broadcast ---

@@ -156,13 +156,14 @@ router.post(`/streams/:slug/${KIND}/edit`, (req, res) => {
   const cols = Object.keys(doc);
   if (existing) {
     db.prepare(
-      `UPDATE documents SET ${cols.map((c) => `${c} = @${c}`).join(", ")}, updated_at = datetime('now') WHERE id = @id`
-    ).run({ ...doc, id: existing.id });
+      `UPDATE documents SET ${cols.map((c) => `${c} = @${c}`).join(", ")}, prepared_by = @prepared_by,
+         updated_at = datetime('now') WHERE id = @id`
+    ).run({ ...doc, id: existing.id, prepared_by: req.session.staffId });
   } else {
     db.prepare(
-      `INSERT INTO documents (stream_id, kind, number, ${cols.join(", ")})
-       VALUES (@stream_id, @kind, @number, ${cols.map((c) => "@" + c).join(", ")})`
-    ).run({ ...doc, stream_id: stream.id, kind, number: nextNumber(kind) });
+      `INSERT INTO documents (stream_id, kind, number, prepared_by, ${cols.join(", ")})
+       VALUES (@stream_id, @kind, @number, @prepared_by, ${cols.map((c) => "@" + c).join(", ")})`
+    ).run({ ...doc, stream_id: stream.id, kind, number: nextNumber(kind), prepared_by: req.session.staffId });
   }
   res.redirect(`/admin/streams/${stream.slug}/${kind}`);
 });
@@ -173,9 +174,13 @@ router.get(`/streams/:slug/${KIND}`, (req, res) => {
   if (!stream) return;
   const doc = loadDoc(stream, req.params.kind);
   if (!doc) return res.redirect(`/admin/streams/${stream.slug}/${req.params.kind}/edit`);
+  const preparer = db
+    .prepare("SELECT name, email FROM staff WHERE id = ?")
+    .get(doc.prepared_by || req.session.staffId);
   res.render("admin/document-view", {
     stream,
     doc,
+    preparer: preparer ? { name: preparer.name, email: preparer.email.replace(/\.removed\.\d+$/, "") } : null,
     s: getSettings(),
     serviceDateText: stream.service_date ? fmtDateLong(stream.service_date) : null,
     ...helpers,

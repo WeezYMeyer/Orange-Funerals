@@ -6,7 +6,7 @@ const isCalendar = path === "/calendar";
 const isCrew = path.startsWith("/crew");
 const isBroadcast = path === "/broadcast";
 const isFinance = path === "/finance";
-const isSettings = path === "/settings";
+const isSettings = path === "/settings" || path === "/staff";
 %>
 <div class="topbar">
   <div class="topbar-inner">
@@ -26,7 +26,7 @@ const isSettings = path === "/settings";
       <a href="/admin/broadcast" class="<%= isBroadcast ? 'current' : '' %>">Broadcast</a>
       <a href="/admin/settings" class="<%= isSettings ? 'current' : '' %>">Settings</a>
       <form method="post" action="/admin/logout" style="display:inline">
-        <button type="submit" class="logout-btn">Log out</button>
+        <button type="submit" class="logout-btn" title="Signed in as <%= typeof signedInName !== 'undefined' ? signedInName : '' %>">Log out<% if (typeof signedInName !== "undefined" && signedInName) { %> <span class="signed-in">(<%= signedInName.split(" ")[0] %>)</span><% } %></button>
       </form>
     </nav>
   </div>

@@ -1,0 +1,68 @@
+<%
+const notices = { added: "Login added.", renamed: "Name updated.", password: "Password changed.", removed: "Login removed." };
+const active = staff.filter(p => !/\.removed\.\d+$/.test(p.email));
+%>
+<%- include("../partials/admin-head", { title: "Staff logins" }) %>
+<%- include("../partials/admin-nav") %>
+
+<div class="container wide-cal">
+  <p class="help" style="margin-bottom:4px;"><a href="/admin/settings">← Business settings</a></p>
+  <h1>Staff logins</h1>
+  <p class="help">Everyone who uses the system should have their own login. Their name shows as <strong>Loaded by</strong> on livestreams and <strong>Prepared by</strong> on quotes and invoices, with their email as the contact.</p>
+
+  <% if (notice && notices[notice]) { %><div class="notice-box"><%= notices[notice] %></div><% } %>
+  <% if (error) { %><div class="error-box"><%= error %></div><% } %>
+
+  <div class="crew-layout">
+    <div class="panel">
+      <h2 class="panel-title">Add a login</h2>
+      <form method="post" action="/admin/staff">
+        <label for="name">Name (as it should appear on quotes)</label>
+        <input type="text" id="name" name="name" required placeholder="e.g. Johan" />
+        <label for="email">Email (used to log in)</label>
+        <input type="email" id="email" name="email" required placeholder="johan@orangeproductions.co.za" />
+        <label for="password">Password (min. 8 characters)</label>
+        <input type="password" id="password" name="password" required minlength="8" />
+        <div style="margin-top:20px;"><button class="btn" type="submit">Add login</button></div>
+      </form>
+    </div>
+
+    <div class="panel">
+      <h2 class="panel-title">Logins (<%= active.length %>)</h2>
+      <table>
+        <thead><tr><th>Name</th><th>Email</th><th>New password</th><th></th></tr></thead>
+        <tbody>
+          <% active.forEach(p => { %>
+            <tr>
+              <td>
+                <form method="post" action="/admin/staff/<%= p.id %>/name" class="inline-form">
+                  <input type="text" name="name" value="<%= p.name %>" aria-label="Name" />
+                  <button class="link-btn" type="submit">Save</button>
+                </form>
+                <% if (p.id === meId) { %><span class="sub">you</span><% } %>
+                <% if (p.email === adminEmail) { %><div class="sub">Main login from Render settings</div><% } %>
+              </td>
+              <td><%= p.email %></td>
+              <td>
+                <form method="post" action="/admin/staff/<%= p.id %>/password" class="inline-form">
+                  <input type="password" name="password" minlength="8" placeholder="New password" aria-label="New password" />
+                  <button class="link-btn" type="submit">Change</button>
+                </form>
+              </td>
+              <td>
+                <% if (p.id !== meId) { %>
+                  <form method="post" action="/admin/staff/<%= p.id %>/remove" onsubmit="return confirm('Remove the login for <%= p.name.replace(/'/g, '') %>?');">
+                    <button class="link-btn" type="submit">Remove</button>
+                  </form>
+                <% } %>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+      <p class="help">The main login (from <code>ADMIN_NAME</code> / <code>ADMIN_EMAIL</code> in Render) is recreated on every restart. To change its name, edit <code>ADMIN_NAME</code> in Render — a name change here is reset on the next restart.</p>
+    </div>
+  </div>
+</div>
+</body>
+</html>

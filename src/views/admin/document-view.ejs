@@ -105,6 +105,7 @@ const rate = (doc.transport_rate_cents / 100).toFixed(2);
           <tr><td><%= label %> no.</td><td><strong><%= doc.number %></strong></td></tr>
           <tr><td>Date</td><td><%= fmtYmd(doc.issue_date) %></td></tr>
           <% if (doc.due_date) { %><tr><td><%= isQuote ? "Valid until" : "Due" %></td><td><%= fmtYmd(doc.due_date) %></td></tr><% } %>
+          <% if (preparer) { %><tr><td>Prepared by</td><td><%= preparer.name %></td></tr><% } %>
         </table>
       </div>
     </header>
@@ -115,7 +116,7 @@ const rate = (doc.transport_rate_cents / 100).toFixed(2);
         <strong><%= s.business_name %></strong><br/>
         <% if (s.business_address) { %><%= s.business_address %><br/><% } %>
         <% if (s.business_phone) { %><%= s.business_phone %><br/><% } %>
-        <% if (s.business_email) { %><%= s.business_email %><br/><% } %>
+        <% if (preparer && preparer.email) { %><%= preparer.email %><br/><% } else if (s.business_email) { %><%= s.business_email %><br/><% } %>
         <% if (s.business_website) { %><%= s.business_website %><% } %>
       </div>
       <div>

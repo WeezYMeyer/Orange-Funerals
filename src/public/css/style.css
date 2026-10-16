@@ -716,3 +716,7 @@ td.overdue { color: var(--danger); font-weight: 600; }
   .doc-cards, .finance-split { grid-template-columns: 1fr; }
 }
 .panel[id] { scroll-margin-top: 90px; }
+
+.signed-in { color: var(--muted-soft); font-weight: 400; }
+.inline-form { display: flex; gap: 8px; align-items: center; margin: 0; }
+.inline-form input { padding: 7px 10px; font-size: 14px; max-width: 200px; }

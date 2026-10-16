@@ -168,6 +168,8 @@ db.exec(`
 {
   const existing = new Set(db.prepare("PRAGMA table_info(streams)").all().map((c) => c.name));
   if (!existing.has("lead_source")) db.exec("ALTER TABLE streams ADD COLUMN lead_source TEXT");
+  const docCols = new Set(db.prepare("PRAGMA table_info(documents)").all().map((c) => c.name));
+  if (!docCols.has("prepared_by")) db.exec("ALTER TABLE documents ADD COLUMN prepared_by INTEGER REFERENCES staff(id)");
 }
 
 // Defaults fill in keys that are missing or empty, so edits on the
