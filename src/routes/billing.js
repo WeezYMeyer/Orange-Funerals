@@ -273,7 +273,7 @@ router.get("/finance", (req, res) => {
 
 const SETTING_FIELDS = [
   "business_name", "business_address", "business_phone", "business_email", "business_website",
-  "bank_name", "bank_account_holder", "bank_account_number", "bank_branch_code", "bank_account_type",
+  "bank_name", "bank_account_holder", "bank_account_number", "bank_branch_code", "bank_account_type", "bank_swift",
   "package_label", "package_details", "package_price", "transport_rate",
   "quote_valid_days", "invoice_due_days", "payment_terms", "vat_note",
 ];

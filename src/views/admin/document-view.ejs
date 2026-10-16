@@ -179,6 +179,7 @@ const rate = (doc.transport_rate_cents / 100).toFixed(2);
           <%= s.bank_name %><% if (s.bank_account_type) { %> · <%= s.bank_account_type %><% } %><br/>
           Account no: <strong><%= s.bank_account_number %></strong><br/>
           <% if (s.bank_branch_code) { %>Branch code: <%= s.bank_branch_code %><br/><% } %>
+          <% if (s.bank_swift) { %>SWIFT: <%= s.bank_swift %><br/><% } %>
           Reference: <strong><%= doc.number %></strong>
         <% } else { %>
           <span class="missing">Add your banking details under Business settings.</span>

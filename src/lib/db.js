@@ -170,7 +170,7 @@ db.exec(`
   if (!existing.has("lead_source")) db.exec("ALTER TABLE streams ADD COLUMN lead_source TEXT");
 }
 
-// Defaults only fill in keys that don't exist yet, so edits on the
+// Defaults fill in keys that are missing or empty, so edits on the
 // Business settings page are never overwritten on reboot.
 {
   const defaults = {
@@ -179,11 +179,12 @@ db.exec(`
     business_phone: "071 325 8694",
     business_email: "johan@orangeproductions.co.za",
     business_website: "www.orangeproductions.co.za",
-    bank_name: "",
-    bank_account_holder: "Orange Productions (Pty) Ltd",
-    bank_account_number: "",
-    bank_branch_code: "",
+    bank_name: "Nedbank",
+    bank_account_holder: "Orange",
+    bank_account_number: "1346824681",
+    bank_branch_code: "198765",
     bank_account_type: "",
+    bank_swift: "NEDSZAJJ",
     package_label: "Budget Streaming Package",
     package_details:
       "Camera & Streaming Operator (1 person)\nFuneral Streaming Kit – professional Panasonic camera, wireless streaming devices with internet\nSound Kit",
@@ -194,7 +195,10 @@ db.exec(`
     payment_terms: "Payment due before the service. Please use the invoice number as your payment reference.",
     vat_note: "Orange Productions is not VAT registered – no VAT is charged.",
   };
-  const ins = db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)");
+  const ins = db.prepare(
+    `INSERT INTO settings (key, value) VALUES (?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value WHERE settings.value IS NULL OR settings.value = ''`
+  );
   for (const [k, v] of Object.entries(defaults)) ins.run(k, v);
 }
 
