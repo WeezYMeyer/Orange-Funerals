@@ -19,7 +19,7 @@ const OP = {
   charcoal: "#242524",
   phone: "071 325 8694",
   phoneIntl: "+27713258694",
-  email: "markus@orangeproductions.co.za",
+  email: "johan@orangeproductions.co.za",
   site: "www.orangeproductions.co.za",
   url: "https://www.orangeproductions.co.za",
 };
@@ -76,15 +76,54 @@ function wrapper({ heading, bodyHtml, unsubToken }) {
   </div>`;
 }
 
-function thankYouEmail({ contactName, streamTitle, unsubToken }) {
+// Recording stays on the watch link for 4 weeks after the stream ends.
+const REWATCH_DAYS = 28;
+
+// ended_at is stored by SQLite in UTC ("YYYY-MM-DD HH:MM:SS"); show the
+// date in South African time.
+function rewatchUntil(endedAt) {
+  const ended = endedAt ? new Date(endedAt.replace(" ", "T") + "Z") : new Date();
+  const until = new Date(ended.getTime() + REWATCH_DAYS * 24 * 60 * 60 * 1000);
+  return until.toLocaleDateString("en-ZA", {
+    timeZone: "Africa/Johannesburg",
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function thankYouEmail({ contactName, streamTitle, watchUrl, endedAt, unsubToken }) {
   const greeting = contactName ? `Dear ${esc(contactName)},` : "Dear friend,";
+  const until = esc(rewatchUntil(endedAt));
+  const url = esc(watchUrl);
   return wrapper({
     heading: "Thank you for watching",
     unsubToken,
     bodyHtml: `
       <p>${greeting}</p>
       <p>Thank you for joining the livestream for <strong>${esc(streamTitle)}</strong>. We're grateful you were able to be present, even from a distance, and we hope it brought you some comfort.</p>
+      <p>If you would like to watch the service again, or share it with family who couldn't attend, the recording will remain available on the same link until <strong>${until}</strong>.</p>
       <p>With warm regards,<br/>${esc(FROM_NAME())}</p>
+
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top: 28px; border-collapse: collapse;">
+        <tr>
+          <td style="background: #f4f6f2; border: 1px solid #dde4d6; border-radius: 6px; padding: 20px 22px; text-align: center;">
+            <div style="font-size: 15px; color: #2b2b2b; margin-bottom: 14px;">Watch the service again</div>
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="border-collapse: collapse; margin: 0 auto;">
+              <tr>
+                <td style="background: #5b6b5b; border-radius: 6px;">
+                  <a href="${url}" style="display: inline-block; padding: 11px 26px; font-family: Arial, sans-serif; font-size: 14px; font-weight: bold; color: #ffffff; text-decoration: none;">Open the livestream</a>
+                </td>
+              </tr>
+            </table>
+            <div style="font-family: Arial, sans-serif; font-size: 12px; color: #6b6b6b; margin-top: 12px; word-break: break-all;">
+              <a href="${url}" style="color: #46543f;">${url}</a><br/>
+              Available until ${until}
+            </div>
+          </td>
+        </tr>
+      </table>
     `,
   });
 }

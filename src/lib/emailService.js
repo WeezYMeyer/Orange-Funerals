@@ -55,6 +55,8 @@ async function sendThankYouEmails(streamId) {
     const html = thankYouEmail({
       contactName: contact.name,
       streamTitle: stream.title,
+      watchUrl: `${process.env.BASE_URL || "http://localhost:3000"}/watch/${stream.slug}`,
+      endedAt: stream.ended_at,
       unsubToken: contact.unsub_token,
     });
     const result = await sendEmail({ to: { email: contact.email, name: contact.name || undefined }, subject, html });
