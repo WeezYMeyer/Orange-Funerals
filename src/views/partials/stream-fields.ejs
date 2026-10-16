@@ -58,6 +58,13 @@
     </div>
   </div>
 
+  <label for="leadSource">Where did this funeral come from?</label>
+  <input type="text" id="leadSource" name="leadSource" list="leadSources" placeholder="e.g. AVBOB Centurion, NG Kerk, referral from…" value="<%= f.leadSource || '' %>" />
+  <datalist id="leadSources">
+    <% (typeof sources !== "undefined" ? sources : []).forEach(src => { %><option value="<%= src %>"></option><% }) %>
+  </datalist>
+  <p class="help">Type a new source or pick one you've used before — the Finance tab totals income per source.</p>
+
   <label for="crewNotes">Notes for the operator</label>
   <textarea id="crewNotes" name="crewNotes" class="short" placeholder="Parking, who to report to, dress code, camera position…"><%= f.crewNotes || '' %></textarea>
 </fieldset>

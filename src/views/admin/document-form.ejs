@@ -1,0 +1,136 @@
+<%
+const isQuote = doc.kind === "quote";
+const label = isQuote ? "Quote" : "Invoice";
+const rands = (c) => (c / 100).toFixed(2);
+%>
+<%- include("../partials/admin-head", { title: label + " · " + stream.title }) %>
+<%- include("../partials/admin-nav") %>
+
+<div class="container narrow">
+  <p class="help" style="margin-bottom:4px;"><a href="/admin/streams/<%= stream.slug %>#billing">← <%= stream.title %></a></p>
+  <h1><%= doc.number ? "Edit " + label.toLowerCase() + " " + doc.number : "New " + label.toLowerCase() %></h1>
+  <% if (!isQuote && !doc.id) { %>
+    <p class="help">Pre-filled from the quote where there is one — check the amounts, then save.</p>
+  <% } %>
+
+  <div class="panel">
+    <% if (error) { %><div class="error-box"><%= error %></div><% } %>
+    <form method="post" action="/admin/streams/<%= stream.slug %>/<%= doc.kind %>/edit" id="docForm">
+      <fieldset class="form-section">
+        <legend>Bill to</legend>
+        <div class="grid-2">
+          <div>
+            <label for="billToName">Name</label>
+            <input type="text" id="billToName" name="billToName" required value="<%= doc.bill_to_name || '' %>" />
+          </div>
+          <div>
+            <label for="billToPhone">Phone</label>
+            <input type="tel" id="billToPhone" name="billToPhone" value="<%= doc.bill_to_phone || '' %>" />
+          </div>
+        </div>
+        <div class="grid-2">
+          <div>
+            <label for="billToEmail">Email (optional)</label>
+            <input type="email" id="billToEmail" name="billToEmail" value="<%= doc.bill_to_email || '' %>" />
+          </div>
+          <div>
+            <label for="billToAddress">Address / company (optional)</label>
+            <input type="text" id="billToAddress" name="billToAddress" value="<%= doc.bill_to_address || '' %>" />
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset class="form-section">
+        <legend>Dates</legend>
+        <div class="grid-2">
+          <div>
+            <label for="issueDate"><%= label %> date</label>
+            <input type="date" id="issueDate" name="issueDate" value="<%= doc.issue_date %>" />
+          </div>
+          <div>
+            <label for="dueDate"><%= isQuote ? "Valid until" : "Payment due" %></label>
+            <input type="date" id="dueDate" name="dueDate" value="<%= doc.due_date || '' %>" />
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset class="form-section">
+        <legend>Items</legend>
+        <div class="grid-2">
+          <div>
+            <label for="packageLabel">Package</label>
+            <input type="text" id="packageLabel" name="packageLabel" value="<%= doc.package_label %>" />
+          </div>
+          <div>
+            <label for="packagePrice">Package price (R)</label>
+            <input type="text" inputmode="decimal" id="packagePrice" name="packagePrice" class="calc" value="<%= rands(doc.package_cents) %>" />
+          </div>
+        </div>
+        <label for="packageDetails">What's included (one per line)</label>
+        <textarea id="packageDetails" name="packageDetails" class="short"><%= doc.package_details || '' %></textarea>
+
+        <label class="pick check-row">
+          <input type="checkbox" id="chargeTransport" name="chargeTransport" value="1" class="calc" <%= doc.charge_transport ? "checked" : "" %> />
+          <span>Charge transport / petrol</span>
+        </label>
+        <div class="grid-2" id="transportFields">
+          <div>
+            <label for="transportKm">Distance (km, return trip)</label>
+            <input type="text" inputmode="decimal" id="transportKm" name="transportKm" class="calc" value="<%= doc.transport_km || '' %>" placeholder="e.g. 80" />
+          </div>
+          <div>
+            <label for="transportRate">Rate per km (R)</label>
+            <input type="text" inputmode="decimal" id="transportRate" name="transportRate" class="calc" value="<%= rands(doc.transport_rate_cents) %>" />
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div>
+            <label for="extraLabel">Extra item (optional)</label>
+            <input type="text" id="extraLabel" name="extraLabel" placeholder="e.g. USB copy of recording" value="<%= doc.extra_label || '' %>" />
+          </div>
+          <div>
+            <label for="extraAmount">Extra amount (R)</label>
+            <input type="text" inputmode="decimal" id="extraAmount" name="extraAmount" class="calc" value="<%= doc.extra_cents ? rands(doc.extra_cents) : '' %>" />
+          </div>
+        </div>
+
+        <div class="total-box">
+          <span>Total</span>
+          <strong id="totalOut">—</strong>
+        </div>
+        <p class="help" id="transportOut"></p>
+      </fieldset>
+
+      <label for="notes">Notes on the <%= label.toLowerCase() %> (optional)</label>
+      <textarea id="notes" name="notes" class="short"><%= doc.notes || '' %></textarea>
+
+      <div style="margin-top:20px;">
+        <button class="btn" type="submit">Save &amp; view <%= label.toLowerCase() %></button>
+        <a class="btn secondary" href="/admin/streams/<%= stream.slug %>#billing">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  // Live total while editing (the server recalculates on save).
+  (function () {
+    const $ = (id) => document.getElementById(id);
+    const num = (v) => { const n = parseFloat(String(v).replace(/[R\s]/gi, "").replace(",", ".")); return isFinite(n) ? n : 0; };
+    const fmt = (r) => "R" + r.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+    function update() {
+      const on = $("chargeTransport").checked;
+      $("transportFields").style.display = on ? "" : "none";
+      const transport = on ? Math.round(num($("transportKm").value) * num($("transportRate").value) * 100) / 100 : 0;
+      const extra = $("extraLabel").value.trim() ? num($("extraAmount").value) : 0;
+      $("totalOut").textContent = fmt(num($("packagePrice").value) + transport + extra);
+      $("transportOut").textContent = on ? "Transport: " + num($("transportKm").value) + " km × " + fmt(num($("transportRate").value)) + " = " + fmt(transport) : "";
+    }
+    document.querySelectorAll("#docForm input").forEach((el) => el.addEventListener("input", update));
+    $("chargeTransport").addEventListener("change", update);
+    update();
+  })();
+</script>
+</body>
+</html>

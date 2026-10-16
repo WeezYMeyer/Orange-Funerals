@@ -11,6 +11,7 @@ const f = form || {
   arrivalTime: stream.arrival_time,
   crewNotes: stream.crew_notes,
   kitId: stream.kit_id,
+  leadSource: stream.lead_source,
 };
 %>
 <%- include("../partials/admin-head", { title: "Edit " + stream.title }) %>
@@ -25,7 +26,7 @@ const f = form || {
       <div class="error-box"><%= error %></div>
     <% } %>
     <form method="post" action="/admin/streams/<%= stream.slug %>/edit">
-      <%- include("../partials/stream-fields", { f, kits }) %>
+      <%- include("../partials/stream-fields", { f, kits, sources }) %>
       <button class="btn" type="submit">Save Changes</button>
       <a class="btn secondary" href="/admin/streams/<%= stream.slug %>">Cancel</a>
     </form>

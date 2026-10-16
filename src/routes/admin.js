@@ -29,6 +29,14 @@ function allKits() {
   return db.prepare("SELECT * FROM kits ORDER BY name").all();
 }
 
+// Previously used "where it came from" values, offered as suggestions.
+function allSources() {
+  return db
+    .prepare("SELECT DISTINCT lead_source AS s FROM streams WHERE lead_source IS NOT NULL AND lead_source != '' ORDER BY lead_source COLLATE NOCASE")
+    .all()
+    .map((r) => r.s);
+}
+
 function publicUrlFor(stream) {
   return `${process.env.BASE_URL || "http://localhost:3000"}/watch/${stream.slug}`;
 }
@@ -48,6 +56,7 @@ function readStreamForm(body) {
     arrivalTime: clean(body.arrivalTime),
     crewNotes: clean(body.crewNotes),
     kitId: body.kitId ? parseInt(body.kitId, 10) || null : null,
+    leadSource: clean(body.leadSource),
   };
   const missing = [];
   if (!f.title) missing.push("title");
@@ -64,7 +73,7 @@ function readStreamForm(body) {
 function streamFormValues(f) {
   return [f.title, f.embedCode, f.serviceDate || null, f.venueName || null, f.venueAddress || null,
     f.mapsLink || null, f.contactName || null, f.contactPhone || null, f.arrivalTime || null,
-    f.crewNotes || null, f.kitId];
+    f.crewNotes || null, f.kitId, f.leadSource || null];
 }
 
 // Other funerals on the same day using the same kit.
@@ -113,6 +122,9 @@ router.use((req, res, next) => {
   next();
 });
 
+// Quotes, invoices, finance & business settings.
+router.use(require("./billing"));
+
 // --- Dashboard ---
 // Two tabs: "Upcoming" (default — anything not yet ended, i.e. still to
 // happen or currently live) and "Past" (ended streams, for looking
@@ -159,20 +171,20 @@ router.get("/", (req, res) => {
 // --- New stream ---
 
 router.get("/streams/new", (req, res) => {
-  res.render("admin/new-stream", { error: null, form: {}, kits: allKits() });
+  res.render("admin/new-stream", { error: null, form: {}, kits: allKits(), sources: allSources() });
 });
 
 router.post("/streams/new", (req, res) => {
   const { f, error } = readStreamForm(req.body);
   if (error) {
-    return res.render("admin/new-stream", { error, form: f, kits: allKits() });
+    return res.render("admin/new-stream", { error, form: f, kits: allKits(), sources: allSources() });
   }
 
   const slug = makeUniqueSlug(f.title);
   db.prepare(
     `INSERT INTO streams (title, embed_code, service_date, venue_name, venue_address, maps_link,
-       contact_name, contact_phone, arrival_time, crew_notes, kit_id, slug, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       contact_name, contact_phone, arrival_time, crew_notes, kit_id, lead_source, slug, created_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(...streamFormValues(f), slug, req.session.staffId);
 
   res.redirect(`/admin/streams/${slug}`);
@@ -255,6 +267,9 @@ router.get("/streams/:slug", (req, res) => {
     assignments,
     availableCrew,
     fmtDateLong: msg.fmtDateLong,
+    docs: Object.fromEntries(
+      db.prepare("SELECT * FROM documents WHERE stream_id = ?").all(stream.id).map((d) => [d.kind, d])
+    ),
     notice: req.query.notice || null,
   });
 });
@@ -307,7 +322,7 @@ router.post("/streams/:slug/resend-thanks", async (req, res) => {
 router.get("/streams/:slug/edit", (req, res) => {
   const stream = db.prepare("SELECT * FROM streams WHERE slug = ?").get(req.params.slug);
   if (!stream) return res.status(404).send("Stream not found");
-  res.render("admin/edit-stream", { stream, error: null, form: null, kits: allKits() });
+  res.render("admin/edit-stream", { stream, error: null, form: null, kits: allKits(), sources: allSources() });
 });
 
 router.post("/streams/:slug/edit", (req, res) => {
@@ -316,12 +331,13 @@ router.post("/streams/:slug/edit", (req, res) => {
 
   const { f, error } = readStreamForm(req.body);
   if (error) {
-    return res.render("admin/edit-stream", { stream, error, form: f, kits: allKits() });
+    return res.render("admin/edit-stream", { stream, error, form: f, kits: allKits(), sources: allSources() });
   }
 
   db.prepare(
     `UPDATE streams SET title = ?, embed_code = ?, service_date = ?, venue_name = ?, venue_address = ?,
-       maps_link = ?, contact_name = ?, contact_phone = ?, arrival_time = ?, crew_notes = ?, kit_id = ?
+       maps_link = ?, contact_name = ?, contact_phone = ?, arrival_time = ?, crew_notes = ?, kit_id = ?,
+       lead_source = ?
      WHERE id = ?`
   ).run(...streamFormValues(f), stream.id);
 
@@ -339,6 +355,7 @@ router.post("/streams/:slug/delete", (req, res) => {
     db.prepare("DELETE FROM chat_messages WHERE stream_id = ?").run(streamId);
     db.prepare("DELETE FROM stream_views WHERE stream_id = ?").run(streamId);
     db.prepare("DELETE FROM stream_crew WHERE stream_id = ?").run(streamId);
+    db.prepare("DELETE FROM documents WHERE stream_id = ?").run(streamId);
     db.prepare("DELETE FROM streams WHERE id = ?").run(streamId);
   });
   deleteAll(stream.id);

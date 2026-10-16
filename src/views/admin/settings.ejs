@@ -1,0 +1,60 @@
+<%
+const field = (key, label, opts = {}) => ({ key, label, ...opts });
+const groups = [
+  ["Business details (shown on quotes & invoices)", [
+    field("business_name", "Business name"),
+    field("business_address", "Address"),
+    field("business_phone", "Phone"),
+    field("business_email", "Email"),
+    field("business_website", "Website"),
+  ]],
+  ["Banking details (shown on quotes & invoices)", [
+    field("bank_account_holder", "Account holder"),
+    field("bank_name", "Bank", { placeholder: "e.g. FNB" }),
+    field("bank_account_type", "Account type", { placeholder: "e.g. Cheque / Business" }),
+    field("bank_account_number", "Account number"),
+    field("bank_branch_code", "Branch code"),
+  ]],
+  ["Default package & pricing (pre-filled on every new quote)", [
+    field("package_label", "Package name"),
+    field("package_price", "Package price (R)"),
+    field("package_details", "What's included (one per line)", { textarea: true }),
+    field("transport_rate", "Transport rate per km (R)"),
+  ]],
+  ["Terms", [
+    field("quote_valid_days", "Quotes valid for (days)"),
+    field("invoice_due_days", "Invoice due after (days) — the service date is used if later"),
+    field("payment_terms", "Payment terms on invoices", { textarea: true }),
+    field("vat_note", "VAT note under the total"),
+  ]],
+];
+%>
+<%- include("../partials/admin-head", { title: "Business settings" }) %>
+<%- include("../partials/admin-nav") %>
+
+<div class="container narrow">
+  <h1>Business settings</h1>
+  <p class="help">Used on quotes and invoices. Changes apply to documents from now on — open an existing quote or invoice to see them updated too.</p>
+  <% if (notice === "saved") { %><div class="notice-box">Settings saved.</div><% } %>
+
+  <div class="panel">
+    <form method="post" action="/admin/settings">
+      <% groups.forEach(([title, fields]) => { %>
+        <fieldset class="form-section">
+          <legend><%= title %></legend>
+          <% fields.forEach(fl => { %>
+            <label for="<%= fl.key %>"><%= fl.label %></label>
+            <% if (fl.textarea) { %>
+              <textarea id="<%= fl.key %>" name="<%= fl.key %>" class="short"><%= s[fl.key] || '' %></textarea>
+            <% } else { %>
+              <input type="text" id="<%= fl.key %>" name="<%= fl.key %>" placeholder="<%= fl.placeholder || '' %>" value="<%= s[fl.key] || '' %>" />
+            <% } %>
+          <% }) %>
+        </fieldset>
+      <% }) %>
+      <button class="btn" type="submit">Save settings</button>
+    </form>
+  </div>
+</div>
+</body>
+</html>

@@ -129,6 +129,75 @@ db.exec(`
   }
 }
 
+// --- Quotes, invoices & business settings (added Oct 2026) ---
+db.exec(`
+  CREATE TABLE IF NOT EXISTS settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT
+  );
+
+  -- One quote and/or one invoice per funeral. Money is stored in cents.
+  CREATE TABLE IF NOT EXISTS documents (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    stream_id         INTEGER NOT NULL REFERENCES streams(id),
+    kind              TEXT NOT NULL,            -- 'quote' | 'invoice'
+    number            TEXT NOT NULL UNIQUE,     -- e.g. Q0001 / INV0001
+    issue_date        TEXT NOT NULL,            -- YYYY-MM-DD
+    due_date          TEXT,                     -- quote: valid until; invoice: due date
+    bill_to_name      TEXT,
+    bill_to_phone     TEXT,
+    bill_to_email     TEXT,
+    bill_to_address   TEXT,
+    package_label     TEXT NOT NULL,
+    package_details   TEXT,
+    package_cents     INTEGER NOT NULL DEFAULT 0,
+    charge_transport  INTEGER NOT NULL DEFAULT 0,
+    transport_km      REAL NOT NULL DEFAULT 0,
+    transport_rate_cents INTEGER NOT NULL DEFAULT 0,
+    extra_label       TEXT,
+    extra_cents       INTEGER NOT NULL DEFAULT 0,
+    total_cents       INTEGER NOT NULL DEFAULT 0,
+    notes             TEXT,
+    paid_at           TEXT,                     -- invoices only
+    created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at        TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(stream_id, kind)
+  );
+`);
+
+{
+  const existing = new Set(db.prepare("PRAGMA table_info(streams)").all().map((c) => c.name));
+  if (!existing.has("lead_source")) db.exec("ALTER TABLE streams ADD COLUMN lead_source TEXT");
+}
+
+// Defaults only fill in keys that don't exist yet, so edits on the
+// Business settings page are never overwritten on reboot.
+{
+  const defaults = {
+    business_name: "Orange Productions (Pty) Ltd",
+    business_address: "Lyttelton Manor, Centurion, Gauteng",
+    business_phone: "071 325 8694",
+    business_email: "johan@orangeproductions.co.za",
+    business_website: "www.orangeproductions.co.za",
+    bank_name: "",
+    bank_account_holder: "Orange Productions (Pty) Ltd",
+    bank_account_number: "",
+    bank_branch_code: "",
+    bank_account_type: "",
+    package_label: "Budget Streaming Package",
+    package_details:
+      "Camera & Streaming Operator (1 person)\nFuneral Streaming Kit – professional Panasonic camera, wireless streaming devices with internet\nSound Kit",
+    package_price: "3000",
+    transport_rate: "5",
+    quote_valid_days: "7",
+    invoice_due_days: "0",
+    payment_terms: "Payment due before the service. Please use the invoice number as your payment reference.",
+    vat_note: "Orange Productions is not VAT registered – no VAT is charged.",
+  };
+  const ins = db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)");
+  for (const [k, v] of Object.entries(defaults)) ins.run(k, v);
+}
+
 // The three funeral kits. Safe to run every boot.
 for (const name of ["Kit 1", "Kit 2", "Kit 3"]) {
   db.prepare("INSERT OR IGNORE INTO kits (name) VALUES (?)").run(name);

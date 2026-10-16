@@ -1,0 +1,98 @@
+<%- include("../partials/admin-head", { title: "Finance" }) %>
+<%- include("../partials/admin-nav") %>
+
+<div class="container wide-cal">
+  <div class="cal-head">
+    <h1>Finance · <%= monthLabel %></h1>
+    <div class="cal-nav">
+      <a class="btn secondary small" href="/admin/finance?month=<%= prev %>">← Prev</a>
+      <a class="btn secondary small" href="/admin/finance">This month</a>
+      <a class="btn secondary small" href="/admin/finance?month=<%= next %>">Next →</a>
+    </div>
+  </div>
+  <p class="help">Funerals are counted in the month of the service date. Income is taken from invoices; quotes without an invoice are shown separately.</p>
+
+  <div class="stat-row">
+    <div class="stat"><span>Funerals</span><strong><%= t.funerals %></strong></div>
+    <div class="stat"><span>Invoiced</span><strong><%= fmtR(t.invoiced) %></strong></div>
+    <div class="stat good"><span>Paid</span><strong><%= fmtR(t.paid) %></strong></div>
+    <div class="stat <%= t.outstanding ? 'warn' : '' %>"><span>Outstanding</span><strong><%= fmtR(t.outstanding) %></strong></div>
+    <div class="stat muted"><span>Quoted, not invoiced</span><strong><%= fmtR(t.quotedOnly) %></strong></div>
+  </div>
+  <% if (t.transport) { %><p class="help">Includes <%= fmtR(t.transport) %> charged for transport / petrol.</p><% } %>
+
+  <div class="panel">
+    <h2 class="panel-title">Funerals this month</h2>
+    <% if (rows.length === 0) { %>
+      <p class="help">No funerals with a service date in <%= monthLabel %>.</p>
+    <% } else { %>
+      <table>
+        <thead><tr><th>Date</th><th>Funeral</th><th>Came from</th><th>Quote</th><th>Invoice</th><th class="num">Amount</th><th>Status</th></tr></thead>
+        <tbody>
+          <% rows.forEach(r => { %>
+            <tr>
+              <td><%= r.dateText %></td>
+              <td><a href="/admin/streams/<%= r.slug %>#billing"><%= r.title %></a></td>
+              <td><%= r.lead_source || "—" %></td>
+              <td><% if (r.q_number) { %><a href="/admin/streams/<%= r.slug %>/quote"><%= r.q_number %></a><% } else { %>—<% } %></td>
+              <td><% if (r.i_number) { %><a href="/admin/streams/<%= r.slug %>/invoice"><%= r.i_number %></a><% } else { %>—<% } %></td>
+              <td class="num"><%= r.i_number ? fmtR(r.i_total) : (r.q_number ? fmtR(r.q_total) : "—") %></td>
+              <td>
+                <% if (r.i_number && r.paid_at) { %><span class="tag crew-confirmed">Paid</span>
+                <% } else if (r.i_number) { %><span class="tag crew-asked">Unpaid</span>
+                <% } else if (r.q_number) { %><span class="tag">Quoted</span>
+                <% } else { %><span class="tag crew-none">No quote</span><% } %>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    <% } %>
+  </div>
+
+  <div class="crew-layout finance-split">
+    <div class="panel">
+      <h2 class="panel-title">Where funerals came from</h2>
+      <% if (sources.length === 0) { %>
+        <p class="help">Nothing this month.</p>
+      <% } else { %>
+        <table>
+          <thead><tr><th>Source</th><th class="num">Funerals</th><th class="num">Invoiced</th></tr></thead>
+          <tbody>
+            <% sources.forEach(b => { %>
+              <tr><td><%= b.source %></td><td class="num"><%= b.funerals %></td><td class="num"><%= fmtR(b.invoiced) %></td></tr>
+            <% }) %>
+          </tbody>
+        </table>
+      <% } %>
+    </div>
+
+    <div class="panel">
+      <h2 class="panel-title">All unpaid invoices</h2>
+      <% if (unpaid.length === 0) { %>
+        <p class="help">Nothing outstanding. 🎉</p>
+      <% } else { %>
+        <table>
+          <thead><tr><th>Invoice</th><th>Funeral</th><th>Due</th><th class="num">Amount</th><th></th></tr></thead>
+          <tbody>
+            <% unpaid.forEach(u => { %>
+              <tr>
+                <td><a href="/admin/streams/<%= u.slug %>/invoice"><%= u.number %></a></td>
+                <td><%= u.title %></td>
+                <td class="<%= u.due_date && u.due_date < today ? 'overdue' : '' %>"><%= fmtYmd(u.due_date) %></td>
+                <td class="num"><%= fmtR(u.total_cents) %></td>
+                <td>
+                  <form method="post" action="/admin/streams/<%= u.slug %>/invoice/paid" style="margin:0">
+                    <button class="link-btn" type="submit">Mark paid</button>
+                  </form>
+                </td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      <% } %>
+    </div>
+  </div>
+</div>
+</body>
+</html>

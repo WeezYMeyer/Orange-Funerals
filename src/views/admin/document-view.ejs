@@ -1,0 +1,205 @@
+<%
+const isQuote = doc.kind === "quote";
+const label = isQuote ? "Quote" : "Invoice";
+const transport = transportCents(doc);
+const details = (doc.package_details || "").split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+const hasBank = s.bank_account_number && s.bank_account_number.trim();
+const rate = (doc.transport_rate_cents / 100).toFixed(2);
+%>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title><%= label %> <%= doc.number %> · <%= stream.title %></title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet" />
+  <style>
+    :root { --orange: #F05A22; --charcoal: #242524; --ink: #2b2b2b; --muted: #6f6f6f; --line: #e6e3de; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #eceae6; font-family: Roboto, Helvetica, Arial, sans-serif; color: var(--ink); }
+    .toolbar { max-width: 210mm; margin: 20px auto 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 0 16px; }
+    .toolbar a, .toolbar button { font: 500 14px Roboto, sans-serif; padding: 9px 16px; border-radius: 8px; border: 1px solid #cfcac2; background: #fff; color: var(--ink); text-decoration: none; cursor: pointer; }
+    .toolbar .primary { background: var(--orange); border-color: var(--orange); color: #fff; }
+    .toolbar .spacer { flex: 1; }
+    .toolbar .hint { font-size: 12px; color: var(--muted); width: 100%; }
+    .page { background: #fff; width: 210mm; min-height: 297mm; margin: 0 auto 40px; padding: 18mm 18mm 16mm; position: relative; box-shadow: 0 4px 20px rgba(0,0,0,.08); }
+    .band { position: absolute; top: 0; left: 0; right: 0; height: 6px; background: linear-gradient(90deg, var(--charcoal) 0 70%, var(--orange) 70%); }
+    header { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand img { width: 58px; height: 58px; }
+    .wordmark { line-height: 1; }
+    .wordmark .w1 { font-weight: 700; font-size: 26px; letter-spacing: .5px; color: var(--charcoal); }
+    .wordmark .w2 { font-weight: 300; font-size: 15px; letter-spacing: 3px; color: var(--charcoal); margin-top: 3px; }
+    .doc-title { text-align: right; }
+    .doc-title h1 { margin: 0; font-size: 30px; font-weight: 700; letter-spacing: 2px; color: var(--orange); text-transform: uppercase; }
+    .doc-title table { margin-left: auto; margin-top: 8px; font-size: 13px; border-collapse: collapse; }
+    .doc-title td { padding: 2px 0 2px 14px; }
+    .doc-title td:first-child { color: var(--muted); }
+    .parties { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin: 30px 0 22px; font-size: 13px; line-height: 1.55; }
+    .parties h3, .service h3 { margin: 0 0 6px; font-size: 11px; font-weight: 500; letter-spacing: 1.5px; text-transform: uppercase; color: var(--orange); }
+    .parties strong { font-size: 14px; }
+    .service { background: #f7f6f4; border-left: 3px solid var(--orange); padding: 12px 16px; font-size: 13px; line-height: 1.55; margin-bottom: 22px; }
+    table.items { width: 100%; border-collapse: collapse; font-size: 13px; }
+    table.items th { text-align: left; font-size: 11px; font-weight: 500; letter-spacing: 1px; text-transform: uppercase; color: #fff; background: var(--charcoal); padding: 9px 10px; }
+    table.items th.num, table.items td.num { text-align: right; white-space: nowrap; }
+    table.items td { padding: 11px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    table.items ul { margin: 6px 0 0; padding-left: 18px; color: #555; font-weight: 300; }
+    table.items li { margin: 2px 0; }
+    .totals { display: flex; justify-content: flex-end; margin-top: 4px; }
+    .totals table { font-size: 14px; border-collapse: collapse; min-width: 260px; }
+    .totals td { padding: 8px 10px; }
+    .totals .grand td { font-size: 18px; font-weight: 700; border-top: 2px solid var(--charcoal); }
+    .totals .grand td:last-child { color: var(--orange); }
+    .vat { text-align: right; font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .info { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 30px; font-size: 13px; line-height: 1.6; }
+    .info h3 { margin: 0 0 6px; font-size: 11px; font-weight: 500; letter-spacing: 1.5px; text-transform: uppercase; color: var(--orange); }
+    .info .missing { color: #b0412b; }
+    .notes { margin-top: 20px; font-size: 13px; white-space: pre-wrap; line-height: 1.55; }
+    footer { position: absolute; left: 18mm; right: 18mm; bottom: 12mm; border-top: 1px solid var(--line); padding-top: 8px; font-size: 11px; color: var(--muted); display: flex; justify-content: space-between; }
+    .stamp { position: absolute; top: 62mm; right: 22mm; transform: rotate(-12deg); border: 3px solid #2f9e5b; color: #2f9e5b; font-weight: 700; font-size: 26px; letter-spacing: 3px; padding: 4px 14px; border-radius: 6px; opacity: .85; }
+    .stamp small { display: block; font-size: 11px; letter-spacing: 1px; text-align: center; font-weight: 500; }
+    @media (max-width: 820px) {
+      .page { width: auto; min-height: 0; margin: 0 8px 30px; padding: 24px 16px 70px; }
+      header, .parties, .info { display: block; }
+      .doc-title { text-align: left; margin-top: 16px; } .doc-title table { margin-left: 0; }
+      .parties > div, .info > div { margin-bottom: 16px; }
+      footer { left: 16px; right: 16px; bottom: 16px; }
+    }
+    @media print {
+      @page { size: A4; margin: 0; }
+      body { background: #fff; }
+      .toolbar { display: none; }
+      .page { margin: 0; box-shadow: none; width: 210mm; min-height: 297mm; }
+      * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <a href="/admin/streams/<%= stream.slug %>#billing">← Back</a>
+    <a href="/admin/streams/<%= stream.slug %>/<%= doc.kind %>/edit">Edit</a>
+    <% if (!isQuote) { %>
+      <form method="post" action="/admin/streams/<%= stream.slug %>/invoice/<%= doc.paid_at ? 'unpaid' : 'paid' %>" style="margin:0">
+        <button type="submit"><%= doc.paid_at ? "Mark as unpaid" : "Mark as paid" %></button>
+      </form>
+    <% } %>
+    <span class="spacer"></span>
+    <button class="primary" onclick="window.print()">Print / Save as PDF</button>
+    <span class="hint">In the print window choose <strong>Save as PDF</strong>, then send the PDF to the client on WhatsApp or email.</span>
+  </div>
+
+  <div class="page">
+    <div class="band"></div>
+    <% if (!isQuote && doc.paid_at) { %><div class="stamp">PAID<small><%= fmtYmd(doc.paid_at) %></small></div><% } %>
+
+    <header>
+      <div class="brand">
+        <img src="/img/orange-productions-mark.png" alt="" />
+        <div class="wordmark"><div class="w1">ORANGE</div><div class="w2">PRODUCTIONS</div></div>
+      </div>
+      <div class="doc-title">
+        <h1><%= label %></h1>
+        <table>
+          <tr><td><%= label %> no.</td><td><strong><%= doc.number %></strong></td></tr>
+          <tr><td>Date</td><td><%= fmtYmd(doc.issue_date) %></td></tr>
+          <% if (doc.due_date) { %><tr><td><%= isQuote ? "Valid until" : "Due" %></td><td><%= fmtYmd(doc.due_date) %></td></tr><% } %>
+        </table>
+      </div>
+    </header>
+
+    <div class="parties">
+      <div>
+        <h3>From</h3>
+        <strong><%= s.business_name %></strong><br/>
+        <% if (s.business_address) { %><%= s.business_address %><br/><% } %>
+        <% if (s.business_phone) { %><%= s.business_phone %><br/><% } %>
+        <% if (s.business_email) { %><%= s.business_email %><br/><% } %>
+        <% if (s.business_website) { %><%= s.business_website %><% } %>
+      </div>
+      <div>
+        <h3><%= isQuote ? "Prepared for" : "Bill to" %></h3>
+        <strong><%= doc.bill_to_name %></strong><br/>
+        <% if (doc.bill_to_address) { %><%= doc.bill_to_address %><br/><% } %>
+        <% if (doc.bill_to_phone) { %><%= doc.bill_to_phone %><br/><% } %>
+        <% if (doc.bill_to_email) { %><%= doc.bill_to_email %><% } %>
+      </div>
+    </div>
+
+    <div class="service">
+      <h3>Service</h3>
+      Funeral livestream – <strong><%= stream.title %></strong><br/>
+      <%= serviceDateText || "Date to be confirmed" %><% if (stream.venue_name) { %> · <%= stream.venue_name %><% } %>
+    </div>
+
+    <table class="items">
+      <thead><tr><th>Description</th><th class="num">Qty</th><th class="num">Rate</th><th class="num">Amount</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>
+            <strong><%= doc.package_label %></strong>
+            <% if (details.length) { %><ul><% details.forEach(d => { %><li><%= d %></li><% }) %></ul><% } %>
+          </td>
+          <td class="num">1</td>
+          <td class="num"><%= fmtR(doc.package_cents) %></td>
+          <td class="num"><%= fmtR(doc.package_cents) %></td>
+        </tr>
+        <% if (doc.charge_transport) { %>
+          <tr>
+            <td><strong>Transport / petrol</strong><ul><li><%= doc.transport_km %> km @ R<%= rate %> per km</li></ul></td>
+            <td class="num"><%= doc.transport_km %> km</td>
+            <td class="num">R<%= rate %></td>
+            <td class="num"><%= fmtR(transport) %></td>
+          </tr>
+        <% } %>
+        <% if (doc.extra_label) { %>
+          <tr>
+            <td><strong><%= doc.extra_label %></strong></td>
+            <td class="num">1</td>
+            <td class="num"><%= fmtR(doc.extra_cents) %></td>
+            <td class="num"><%= fmtR(doc.extra_cents) %></td>
+          </tr>
+        <% } %>
+      </tbody>
+    </table>
+
+    <div class="totals">
+      <table>
+        <tr class="grand"><td>Total</td><td class="num" style="text-align:right"><%= fmtR(doc.total_cents) %></td></tr>
+      </table>
+    </div>
+    <% if (s.vat_note) { %><div class="vat"><%= s.vat_note %></div><% } %>
+
+    <div class="info">
+      <div>
+        <h3>Banking details</h3>
+        <% if (hasBank) { %>
+          <%= s.bank_account_holder %><br/>
+          <%= s.bank_name %><% if (s.bank_account_type) { %> · <%= s.bank_account_type %><% } %><br/>
+          Account no: <strong><%= s.bank_account_number %></strong><br/>
+          <% if (s.bank_branch_code) { %>Branch code: <%= s.bank_branch_code %><br/><% } %>
+          Reference: <strong><%= doc.number %></strong>
+        <% } else { %>
+          <span class="missing">Add your banking details under Business settings.</span>
+        <% } %>
+      </div>
+      <div>
+        <h3><%= isQuote ? "Acceptance" : "Payment terms" %></h3>
+        <% if (isQuote) { %>
+          To accept this quote, simply reply to confirm and we'll book your livestream.<% if (doc.due_date) { %> This quote is valid until <%= fmtYmd(doc.due_date) %>.<% } %>
+        <% } else { %>
+          <%= s.payment_terms %>
+        <% } %>
+      </div>
+    </div>
+
+    <% if (doc.notes) { %><div class="notes"><%= doc.notes %></div><% } %>
+
+    <footer>
+      <span>Thank you for trusting us with this service.</span>
+      <span><%= s.business_name %></span>
+    </footer>
+  </div>
+</body>
+</html>

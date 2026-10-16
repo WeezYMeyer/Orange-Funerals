@@ -89,6 +89,7 @@ const scheduled = fmtScheduled(stream.service_date);
         <%= [stream.venue_name, stream.venue_address].filter(Boolean).join(", ") || "—" %>
         <% if (stream.maps_link) { %> · <a href="<%= stream.maps_link %>" target="_blank" rel="noopener">Open in Google Maps</a><% } %>
       </dd>
+      <dt>Came from</dt><dd><%= stream.lead_source || "—" %></dd>
       <dt>Client contact</dt><dd><%= [stream.contact_name, stream.contact_phone].filter(Boolean).join(" · ") || "—" %></dd>
       <dt>Kit</dt>
       <dd>
@@ -171,6 +172,48 @@ const scheduled = fmtScheduled(stream.service_date);
     <% } else if (assignments.length === 0) { %>
       <p class="help">Your crew list is empty — <a href="/admin/crew">add your camera operators</a> first.</p>
     <% } %>
+  </div>
+
+  <div class="panel" id="billing">
+    <div class="panel-head">
+      <h2>Quote &amp; invoice</h2>
+      <a href="/admin/finance">Finance</a>
+    </div>
+    <div class="doc-cards">
+      <% ["quote", "invoice"].forEach(kind => { const d = docs[kind]; const L = kind === "quote" ? "Quote" : "Invoice"; %>
+        <div class="doc-card">
+          <div class="doc-card-head">
+            <strong><%= L %></strong>
+            <% if (d) { %>
+              <span class="sub"><%= d.number %></span>
+              <% if (kind === "invoice") { %>
+                <span class="tag <%= d.paid_at ? 'crew-confirmed' : 'crew-asked' %>"><%= d.paid_at ? "Paid" : "Unpaid" %></span>
+              <% } %>
+            <% } %>
+          </div>
+          <% if (d) { %>
+            <div class="doc-amount">R<%= (d.total_cents / 100).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, " ") %></div>
+            <div class="doc-actions">
+              <a class="btn small" href="/admin/streams/<%= stream.slug %>/<%= kind %>">View / PDF</a>
+              <a class="btn small secondary" href="/admin/streams/<%= stream.slug %>/<%= kind %>/edit">Edit</a>
+              <% if (kind === "invoice") { %>
+                <form method="post" action="/admin/streams/<%= stream.slug %>/invoice/<%= d.paid_at ? 'unpaid' : 'paid' %>">
+                  <button class="btn small secondary" type="submit"><%= d.paid_at ? "Mark unpaid" : "Mark paid" %></button>
+                </form>
+              <% } %>
+              <form method="post" action="/admin/streams/<%= stream.slug %>/<%= kind %>/delete" onsubmit="return confirm('Delete this <%= kind %>?');">
+                <button class="link-btn" type="submit">Delete</button>
+              </form>
+            </div>
+          <% } else { %>
+            <p class="help"><%= kind === "quote" ? "No quote yet." : (docs.quote ? "Ready to invoice from the quote." : "No invoice yet.") %></p>
+            <a class="btn small <%= kind === 'invoice' && !docs.quote ? 'secondary' : '' %>" href="/admin/streams/<%= stream.slug %>/<%= kind %>/edit">
+              <%= kind === "quote" ? "Create quote" : (docs.quote ? "Create invoice from quote" : "Create invoice") %>
+            </a>
+          <% } %>
+        </div>
+      <% }) %>
+    </div>
   </div>
 
   <div class="panel">

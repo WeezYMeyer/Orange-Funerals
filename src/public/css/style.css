@@ -106,7 +106,7 @@ code {
   z-index: 10;
 }
 .topbar-inner {
-  max-width: 880px;
+  max-width: 1280px;
   margin: 0 auto;
   padding: 16px 20px;
   display: flex;
@@ -232,6 +232,7 @@ input[type="text"],
 input[type="email"],
 input[type="password"],
 input[type="date"],
+input[type="number"],
 input[type="datetime-local"],
 input[type="time"],
 input[type="tel"],
@@ -684,3 +685,34 @@ label.pick input { margin: 0; }
   .crew-table tr { display: block; padding: 10px 0; border-bottom: 1px solid var(--line-soft); }
   .crew-table td { display: block; border: none; padding: 4px 0; }
 }
+
+
+/* =========================================================
+   Quotes, invoices & finance (Oct 2026)
+   ========================================================= */
+.doc-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.doc-card { border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; background: #fff; }
+.doc-card-head { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.doc-amount { font-size: 22px; font-weight: 600; margin: 2px 0 12px; }
+.doc-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.doc-actions form { margin: 0; }
+.check-row { margin-top: 18px; display: inline-flex; }
+.total-box { display: flex; justify-content: space-between; align-items: baseline; margin-top: 20px; padding: 14px 16px; background: var(--accent-soft); border: 1px solid var(--accent-line); border-radius: var(--radius); }
+.total-box strong { font-size: 22px; }
+
+.stat-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin: 16px 0 8px; }
+.stat { background: #fff; border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 16px; box-shadow: var(--shadow-sm); }
+.stat span { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+.stat strong { font-size: 22px; font-weight: 600; }
+.stat.good strong { color: #1e6b3a; }
+.stat.warn strong { color: var(--warning); }
+.stat.muted strong { color: var(--muted); }
+th.num, td.num { text-align: right; white-space: nowrap; }
+td.overdue { color: var(--danger); font-weight: 600; }
+.finance-split { grid-template-columns: 1fr 1fr; }
+
+@media (max-width: 860px) {
+  .stat-row { grid-template-columns: 1fr 1fr; }
+  .doc-cards, .finance-split { grid-template-columns: 1fr; }
+}
+.panel[id] { scroll-margin-top: 90px; }
