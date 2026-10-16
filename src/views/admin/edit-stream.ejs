@@ -1,27 +1,31 @@
 <%
-const f = form || { title: stream.title, embedCode: stream.embed_code, serviceDate: stream.service_date || "" };
+const f = form || {
+  title: stream.title,
+  embedCode: stream.embed_code,
+  serviceDate: stream.service_date || "",
+  venueName: stream.venue_name,
+  venueAddress: stream.venue_address,
+  mapsLink: stream.maps_link,
+  contactName: stream.contact_name,
+  contactPhone: stream.contact_phone,
+  arrivalTime: stream.arrival_time,
+  crewNotes: stream.crew_notes,
+  kitId: stream.kit_id,
+};
 %>
 <%- include("../partials/admin-head", { title: "Edit " + stream.title }) %>
 <%- include("../partials/admin-nav") %>
 
 <div class="container narrow">
   <h1>Edit Livestream</h1>
-  <p class="help">The public link (<code><%= stream.slug %></code>) never changes here — safe to update the embed code even after you've already sent the link out, e.g. if YoloLive gave you a corrected one.</p>
+  <p class="help">The public link (<code><%= stream.slug %></code>) never changes here — safe to update details even after you've sent the link out. If you change the venue or time after an operator was confirmed, press <strong>Send details again</strong> on the funeral page so they get the update.</p>
 
   <div class="panel">
     <% if (error) { %>
       <div class="error-box"><%= error %></div>
     <% } %>
     <form method="post" action="/admin/streams/<%= stream.slug %>/edit">
-      <label for="title">Title (shown to viewers)</label>
-      <input type="text" id="title" name="title" required autofocus value="<%= f.title || '' %>" />
-
-      <label for="serviceDate">Service date &amp; time (optional)</label>
-      <input type="datetime-local" id="serviceDate" name="serviceDate" value="<%= f.serviceDate || '' %>" />
-
-      <label for="embedCode">YoloLive embed code</label>
-      <textarea id="embedCode" name="embedCode" required><%= f.embedCode || '' %></textarea>
-
+      <%- include("../partials/stream-fields", { f, kits }) %>
       <button class="btn" type="submit">Save Changes</button>
       <a class="btn secondary" href="/admin/streams/<%= stream.slug %>">Cancel</a>
     </form>

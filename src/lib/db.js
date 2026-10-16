@@ -77,6 +77,63 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_email_logs_contact ON email_logs(contact_id);
 `);
 
+// --- Crew, kits & funeral logistics (added Oct 2026) ---
+db.exec(`
+  CREATE TABLE IF NOT EXISTS crew (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    name        TEXT NOT NULL,
+    phone       TEXT NOT NULL,
+    own_vehicle INTEGER NOT NULL DEFAULT 0,
+    notes       TEXT,
+    active      INTEGER NOT NULL DEFAULT 1,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS kits (
+    id    INTEGER PRIMARY KEY AUTOINCREMENT,
+    name  TEXT NOT NULL UNIQUE
+  );
+
+  -- One row per operator considered for a funeral.
+  -- status: 'shortlisted' -> 'asked' -> 'confirmed' | 'declined'
+  CREATE TABLE IF NOT EXISTS stream_crew (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    stream_id        INTEGER NOT NULL REFERENCES streams(id),
+    crew_id          INTEGER NOT NULL REFERENCES crew(id),
+    status           TEXT NOT NULL DEFAULT 'shortlisted',
+    uses_own_vehicle INTEGER NOT NULL DEFAULT 0,
+    asked_at         TEXT,
+    confirmed_at     TEXT,
+    created_at       TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(stream_id, crew_id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_stream_crew_stream ON stream_crew(stream_id);
+`);
+
+// Funeral detail columns on streams — added with ALTER so existing
+// databases upgrade in place on the next boot.
+{
+  const existing = new Set(db.prepare("PRAGMA table_info(streams)").all().map((c) => c.name));
+  const cols = {
+    venue_name: "TEXT",
+    venue_address: "TEXT",
+    maps_link: "TEXT",
+    contact_name: "TEXT",
+    contact_phone: "TEXT",
+    arrival_time: "TEXT",
+    crew_notes: "TEXT",
+    kit_id: "INTEGER REFERENCES kits(id)",
+  };
+  for (const [name, type] of Object.entries(cols)) {
+    if (!existing.has(name)) db.exec(`ALTER TABLE streams ADD COLUMN ${name} ${type}`);
+  }
+}
+
+// The three funeral kits. Safe to run every boot.
+for (const name of ["Kit 1", "Kit 2", "Kit 3"]) {
+  db.prepare("INSERT OR IGNORE INTO kits (name) VALUES (?)").run(name);
+}
+
 // Optional auto-bootstrap of a staff login from environment variables.
 //
 // This exists for hosts where you can't run an interactive `npm run setup`

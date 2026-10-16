@@ -1,0 +1,42 @@
+<%- include("../partials/admin-head", { title: "Calendar" }) %>
+<%- include("../partials/admin-nav") %>
+
+<div class="container wide-cal">
+  <div class="cal-head">
+    <h1><%= monthLabel %></h1>
+    <div class="cal-nav">
+      <a class="btn secondary small" href="/admin/calendar?month=<%= prev %>">← Prev</a>
+      <a class="btn secondary small" href="/admin/calendar">Today</a>
+      <a class="btn secondary small" href="/admin/calendar?month=<%= next %>">Next →</a>
+    </div>
+  </div>
+  <p class="help">
+    <%= total %> funeral<%= total === 1 ? "" : "s" %> this month.
+    <span class="legend"><i class="dot crew-confirmed"></i> operator confirmed</span>
+    <span class="legend"><i class="dot crew-asked"></i> waiting for reply</span>
+    <span class="legend"><i class="dot crew-none"></i> no operator yet</span>
+  </p>
+
+  <div class="calendar">
+    <% ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].forEach(d => { %><div class="cal-dow"><%= d %></div><% }) %>
+    <% cells.forEach(day => { %>
+      <div class="cal-cell <%= day ? '' : 'empty' %> <%= day && day === today ? 'today' : '' %>">
+        <% if (day) { %>
+          <div class="cal-day"><%= day %></div>
+          <% (byDay[day] || []).forEach(s => {
+               const state = s.crew_confirmed ? "crew-confirmed" : (s.crew_asked ? "crew-asked" : "crew-none"); %>
+            <a class="cal-event <%= state %> <%= s.ended_at ? 'ended' : '' %>" href="/admin/streams/<%= s.slug %>">
+              <span class="ev-time"><%= s.time || "" %></span>
+              <span class="ev-title"><%= s.title %></span>
+              <span class="ev-meta">
+                <%= s.crew_confirmed || (s.crew_asked ? s.crew_asked + " asked" : "No operator") %><%= s.kit_name ? " · " + s.kit_name : "" %>
+              </span>
+            </a>
+          <% }) %>
+        <% } %>
+      </div>
+    <% }) %>
+  </div>
+</div>
+</body>
+</html>

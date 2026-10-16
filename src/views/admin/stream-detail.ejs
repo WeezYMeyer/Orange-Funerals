@@ -6,7 +6,7 @@ if (notice === "already-sent") {
   const [ , , sent, failed, skipped ] = notice.split("-");
   noticeHtml = `Thank-you emails: ${sent} sent, ${failed} failed, ${skipped} skipped (opted out).`;
 } else if (notice && notice.startsWith("email-error-")) {
-  noticeHtml = "Sending thank-you emails failed: " + decodeURIComponent(notice.replace("email-error-", "")) + " — check your Everlytic settings in .env.";
+  noticeHtml = "Sending thank-you emails failed: " + decodeURIComponent(notice.replace("email-error-", "")) + " — check the email settings in Render.";
 } else if (notice === "updated") {
   noticeHtml = "Stream details updated. The public link is unchanged.";
 }
@@ -78,6 +78,102 @@ const scheduled = fmtScheduled(stream.service_date);
   </div>
 
   <div class="panel">
+    <div class="panel-head">
+      <h2>Funeral details</h2>
+      <a href="/admin/streams/<%= stream.slug %>/edit">Edit details</a>
+    </div>
+    <dl class="details">
+      <dt>Date</dt><dd><%= fmtDateLong(stream.service_date) %><% if (stream.arrival_time) { %> · crew arrive <%= stream.arrival_time %><% } %></dd>
+      <dt>Venue</dt>
+      <dd>
+        <%= [stream.venue_name, stream.venue_address].filter(Boolean).join(", ") || "—" %>
+        <% if (stream.maps_link) { %> · <a href="<%= stream.maps_link %>" target="_blank" rel="noopener">Open in Google Maps</a><% } %>
+      </dd>
+      <dt>Client contact</dt><dd><%= [stream.contact_name, stream.contact_phone].filter(Boolean).join(" · ") || "—" %></dd>
+      <dt>Kit</dt>
+      <dd>
+        <%= kit ? kit.name : "Not assigned" %>
+        <% clashes.forEach(c => { %>
+          <div class="warn-inline">⚠ <%= kit.name %> is also booked for <a href="/admin/streams/<%= c.slug %>"><%= c.title %></a> on the same day.</div>
+        <% }) %>
+      </dd>
+      <% if (stream.crew_notes) { %><dt>Operator notes</dt><dd class="pre"><%= stream.crew_notes %></dd><% } %>
+    </dl>
+    <% if (!stream.maps_link || !stream.venue_name) { %>
+      <p class="help warn-inline">Venue or Google Maps link missing — <a href="/admin/streams/<%= stream.slug %>/edit">add them</a> before asking operators.</p>
+    <% } %>
+  </div>
+
+  <div class="panel" id="crew">
+    <div class="panel-head">
+      <h2>Camera operators</h2>
+      <a href="/admin/crew">Manage crew list</a>
+    </div>
+
+    <% if (assignments.length === 0) { %>
+      <p class="help">No operators added yet. Tick one or more people below, then ask each of them on WhatsApp.</p>
+    <% } else { %>
+      <table class="crew-table">
+        <thead><tr><th>Operator</th><th>Own car</th><th>Status</th><th>WhatsApp</th><th></th></tr></thead>
+        <tbody>
+          <% assignments.forEach(a => { const base = `/admin/streams/${stream.slug}/crew/${a.id}`; %>
+            <tr>
+              <td><strong><%= a.name %></strong><div class="sub"><%= a.phone %></div></td>
+              <td>
+                <form method="post" action="<%= base %>/<%= a.uses_own_vehicle ? 'vehicle-no' : 'vehicle-yes' %>">
+                  <button type="submit" class="toggle <%= a.uses_own_vehicle ? 'on' : '' %>" title="Click to change"><%= a.uses_own_vehicle ? "Yes" : "No" %></button>
+                </form>
+              </td>
+              <td>
+                <% if (a.status === "confirmed") { %><span class="tag crew-confirmed">Confirmed</span>
+                <% } else if (a.status === "asked") { %><span class="tag crew-asked">Asked</span>
+                <% } else if (a.status === "declined") { %><span class="tag crew-declined">Not available</span>
+                <% } else { %><span class="tag">Not asked yet</span><% } %>
+              </td>
+              <td class="actions">
+                <% if (a.status === "confirmed") { %>
+                  <button type="button" class="btn small wa" data-wa="<%= a.confirmLink %>" data-post="<%= base %>/confirm">Send details again</button>
+                <% } else if (a.status === "declined") { %>
+                  <form method="post" action="<%= base %>/reset"><button class="btn small secondary" type="submit">Undo</button></form>
+                <% } else { %>
+                  <button type="button" class="btn small wa <%= a.status === 'asked' ? 'secondary' : '' %>" data-wa="<%= a.askLink %>" data-post="<%= base %>/ask"><%= a.status === "asked" ? "Ask again" : "Ask availability" %></button>
+                  <% if (a.status === "asked") { %>
+                    <button type="button" class="btn small wa" data-wa="<%= a.confirmLink %>" data-post="<%= base %>/confirm" data-confirm="Confirm <%= a.name.replace(/"/g, '') %> and send them the full brief?">They said yes — confirm &amp; send brief</button>
+                    <form method="post" action="<%= base %>/decline"><button class="btn small secondary" type="submit">Said no</button></form>
+                  <% } %>
+                <% } %>
+              </td>
+              <td>
+                <form method="post" action="<%= base %>/remove" onsubmit="return confirm('Remove <%= a.name.replace(/'/g, '') %> from this funeral?');">
+                  <button class="link-btn" type="submit">Remove</button>
+                </form>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+      <p class="help">Each WhatsApp button opens WhatsApp with the message already typed — just press <strong>Send</strong>. "Own car" changes the transport line in the brief.</p>
+    <% } %>
+
+    <% if (availableCrew.length) { %>
+      <form method="post" action="/admin/streams/<%= stream.slug %>/crew/add" class="add-crew">
+        <label style="margin-top:20px;">Add operators to ask</label>
+        <div class="crew-picks">
+          <% availableCrew.forEach(c => { %>
+            <label class="pick">
+              <input type="checkbox" name="crewIds" value="<%= c.id %>" />
+              <span><strong><%= c.name %></strong> <span class="sub"><%= c.own_vehicle ? "· own car" : "· no car" %><%= c.notes ? " · " + c.notes : "" %></span></span>
+            </label>
+          <% }) %>
+        </div>
+        <button class="btn secondary" type="submit">Add selected</button>
+      </form>
+    <% } else if (assignments.length === 0) { %>
+      <p class="help">Your crew list is empty — <a href="/admin/crew">add your camera operators</a> first.</p>
+    <% } %>
+  </div>
+
+  <div class="panel">
     <h2 style="margin-top:0; font-size:18px;">Viewers who entered their email (<%= viewers.length %>)</h2>
     <% if (viewers.length === 0) { %>
       <p class="help">No one has entered their email for this stream yet.</p>
@@ -105,5 +201,17 @@ const scheduled = fmtScheduled(stream.service_date);
     </form>
   </div>
 </div>
+
+<script>
+  // WhatsApp buttons: open WhatsApp with the message typed, record the
+  // status change, then refresh this page to show it.
+  document.querySelectorAll("button.wa").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (btn.dataset.confirm && !window.confirm(btn.dataset.confirm)) return;
+      window.open(btn.dataset.wa, "_blank", "noopener");
+      fetch(btn.dataset.post, { method: "POST" }).finally(() => location.reload());
+    });
+  });
+</script>
 </body>
 </html>

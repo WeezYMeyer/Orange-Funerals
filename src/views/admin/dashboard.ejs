@@ -46,6 +46,7 @@ const noticeText = notice === "deleted" ? "Stream deleted." : null;
           <tr>
             <th>Title</th>
             <th><a class="sort-link" href="/admin?tab=<%= tab %>&sort=<%= otherSort %>">Scheduled <%= sort === "desc" ? "↓" : "↑" %></a></th>
+            <th>Operator</th>
             <th>Status</th>
             <th>Emails</th>
             <th>Viewers</th>
@@ -58,6 +59,13 @@ const noticeText = notice === "deleted" ? "Stream deleted." : null;
             <tr>
               <td><%= s.title %></td>
               <td><%= fmtScheduled(s) %></td>
+              <td>
+                <% if (s.crew_confirmed) { %><span class="tag crew-confirmed"><%= s.crew_confirmed %></span>
+                <% } else if (s.crew_asked) { %><span class="tag crew-asked"><%= s.crew_asked %> asked</span>
+                <% } else if (!s.ended_at) { %><span class="tag crew-none">Needed</span>
+                <% } else { %>—<% } %>
+                <% if (s.kit_name) { %><div class="sub"><%= s.kit_name %></div><% } %>
+              </td>
               <td>
                 <% if (s.ended_at) { %>
                   <span class="tag ended">Ended</span>

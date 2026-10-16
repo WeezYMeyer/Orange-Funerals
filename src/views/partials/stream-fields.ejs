@@ -1,0 +1,63 @@
+<%# Shared by new-stream.ejs and edit-stream.ejs. Expects: f (form values), kits %>
+<fieldset class="form-section">
+  <legend>Livestream page <span class="legend-note">shown to viewers</span></legend>
+
+  <label for="title">Title (e.g. "Service for John Smith")</label>
+  <input type="text" id="title" name="title" required autofocus value="<%= f.title || '' %>" />
+
+  <label for="serviceDate">Service date &amp; start time</label>
+  <input type="datetime-local" id="serviceDate" name="serviceDate" required value="<%= f.serviceDate || '' %>" />
+
+  <label for="embedCode">YoloLive embed code</label>
+  <textarea id="embedCode" name="embedCode" required placeholder="<iframe src=&quot;https://...&quot; ...></iframe>"><%= f.embedCode || '' %></textarea>
+  <p class="help">Paste the full snippet YoloLive gives you for this stream, exactly as copied.</p>
+</fieldset>
+
+<fieldset class="form-section">
+  <legend>Funeral details <span class="legend-note">staff &amp; crew only — never shown to viewers</span></legend>
+
+  <div class="grid-2">
+    <div>
+      <label for="venueName">Venue name</label>
+      <input type="text" id="venueName" name="venueName" required placeholder="e.g. NG Kerk Lyttelton" value="<%= f.venueName || '' %>" />
+    </div>
+    <div>
+      <label for="venueAddress">Venue address</label>
+      <input type="text" id="venueAddress" name="venueAddress" placeholder="Street, suburb" value="<%= f.venueAddress || '' %>" />
+    </div>
+  </div>
+
+  <label for="mapsLink">Google Maps link</label>
+  <input type="url" id="mapsLink" name="mapsLink" required placeholder="https://maps.app.goo.gl/..." value="<%= f.mapsLink || '' %>" />
+  <p class="help">In Google Maps, find the venue → <strong>Share</strong> → <strong>Copy link</strong>, then paste it here.</p>
+
+  <div class="grid-2">
+    <div>
+      <label for="contactName">Client contact name</label>
+      <input type="text" id="contactName" name="contactName" placeholder="Family member or funeral director" value="<%= f.contactName || '' %>" />
+    </div>
+    <div>
+      <label for="contactPhone">Client contact number</label>
+      <input type="tel" id="contactPhone" name="contactPhone" placeholder="082 123 4567" value="<%= f.contactPhone || '' %>" />
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div>
+      <label for="arrivalTime">Crew arrival time</label>
+      <input type="time" id="arrivalTime" name="arrivalTime" value="<%= f.arrivalTime || '' %>" />
+    </div>
+    <div>
+      <label for="kitId">Funeral kit</label>
+      <select id="kitId" name="kitId">
+        <option value="">— Not assigned yet —</option>
+        <% kits.forEach(k => { %>
+          <option value="<%= k.id %>" <%= String(f.kitId || '') === String(k.id) ? 'selected' : '' %>><%= k.name %></option>
+        <% }) %>
+      </select>
+    </div>
+  </div>
+
+  <label for="crewNotes">Notes for the operator</label>
+  <textarea id="crewNotes" name="crewNotes" class="short" placeholder="Parking, who to report to, dress code, camera position…"><%= f.crewNotes || '' %></textarea>
+</fieldset>

@@ -4,6 +4,7 @@ const db = require("../lib/db");
 const { requireStaff } = require("../lib/auth");
 const { makeUniqueSlug } = require("../lib/slug");
 const { sendThankYouEmails, sendBroadcast } = require("../lib/emailService");
+const msg = require("../lib/crewMessages");
 
 const router = express.Router();
 
@@ -20,6 +21,61 @@ function emailStatus(stream) {
   if (stream.emails_sent > 0 && stream.emails_failed === 0) return "sent";
   if (stream.emails_sent > 0 && stream.emails_failed > 0) return "partial";
   return "failed";
+}
+
+// --- Funeral details helpers ---
+
+function allKits() {
+  return db.prepare("SELECT * FROM kits ORDER BY name").all();
+}
+
+function publicUrlFor(stream) {
+  return `${process.env.BASE_URL || "http://localhost:3000"}/watch/${stream.slug}`;
+}
+
+// Reads and validates the stream form (title, embed, date + funeral details).
+function readStreamForm(body) {
+  const clean = (v) => (typeof v === "string" ? v.trim() : "");
+  const f = {
+    title: clean(body.title),
+    embedCode: clean(body.embedCode),
+    serviceDate: clean(body.serviceDate),
+    venueName: clean(body.venueName),
+    venueAddress: clean(body.venueAddress),
+    mapsLink: clean(body.mapsLink),
+    contactName: clean(body.contactName),
+    contactPhone: clean(body.contactPhone),
+    arrivalTime: clean(body.arrivalTime),
+    crewNotes: clean(body.crewNotes),
+    kitId: body.kitId ? parseInt(body.kitId, 10) || null : null,
+  };
+  const missing = [];
+  if (!f.title) missing.push("title");
+  if (!f.embedCode) missing.push("YoloLive embed code");
+  if (!f.serviceDate) missing.push("service date & time");
+  if (!f.venueName) missing.push("venue name");
+  if (!f.mapsLink) missing.push("Google Maps link");
+  let error = null;
+  if (missing.length) error = `Please fill in: ${missing.join(", ")}.`;
+  else if (!/^https?:\/\//i.test(f.mapsLink)) error = "The Google Maps link should start with https:// — copy it from Google Maps' Share button.";
+  return { f, error };
+}
+
+function streamFormValues(f) {
+  return [f.title, f.embedCode, f.serviceDate || null, f.venueName || null, f.venueAddress || null,
+    f.mapsLink || null, f.contactName || null, f.contactPhone || null, f.arrivalTime || null,
+    f.crewNotes || null, f.kitId];
+}
+
+// Other funerals on the same day using the same kit.
+function kitClashes(stream) {
+  if (!stream.kit_id || !stream.service_date) return [];
+  return db
+    .prepare(
+      `SELECT slug, title, service_date FROM streams
+       WHERE kit_id = ? AND id != ? AND substr(service_date, 1, 10) = substr(?, 1, 10)`
+    )
+    .all(stream.kit_id, stream.id || 0, stream.service_date);
 }
 
 // --- Auth ---
@@ -77,9 +133,14 @@ router.get("/", (req, res) => {
               staff.name AS creator_name,
               (SELECT COUNT(*) FROM stream_views sv WHERE sv.stream_id = s.id) AS viewer_count,
               (SELECT COUNT(*) FROM email_logs el WHERE el.stream_id = s.id AND el.kind = 'thank_you' AND el.status = 'sent') AS emails_sent,
-              (SELECT COUNT(*) FROM email_logs el WHERE el.stream_id = s.id AND el.kind = 'thank_you' AND el.status = 'failed') AS emails_failed
+              (SELECT COUNT(*) FROM email_logs el WHERE el.stream_id = s.id AND el.kind = 'thank_you' AND el.status = 'failed') AS emails_failed,
+              (SELECT GROUP_CONCAT(c.name, ', ') FROM stream_crew sc JOIN crew c ON c.id = sc.crew_id
+                 WHERE sc.stream_id = s.id AND sc.status = 'confirmed') AS crew_confirmed,
+              (SELECT COUNT(*) FROM stream_crew sc WHERE sc.stream_id = s.id AND sc.status = 'asked') AS crew_asked,
+              k.name AS kit_name
        FROM streams s
        LEFT JOIN staff ON staff.id = s.created_by
+       LEFT JOIN kits k ON k.id = s.kit_id
        WHERE ${whereClause}
        ORDER BY (s.service_date IS NULL), s.service_date ${direction}, s.created_at ${direction}`
     )
@@ -98,23 +159,21 @@ router.get("/", (req, res) => {
 // --- New stream ---
 
 router.get("/streams/new", (req, res) => {
-  res.render("admin/new-stream", { error: null, form: {} });
+  res.render("admin/new-stream", { error: null, form: {}, kits: allKits() });
 });
 
 router.post("/streams/new", (req, res) => {
-  const { title, embedCode, serviceDate } = req.body;
-
-  if (!title || !title.trim() || !embedCode || !embedCode.trim()) {
-    return res.render("admin/new-stream", {
-      error: "Please provide both a title and the embed code.",
-      form: req.body,
-    });
+  const { f, error } = readStreamForm(req.body);
+  if (error) {
+    return res.render("admin/new-stream", { error, form: f, kits: allKits() });
   }
 
-  const slug = makeUniqueSlug(title);
+  const slug = makeUniqueSlug(f.title);
   db.prepare(
-    `INSERT INTO streams (slug, title, embed_code, service_date, created_by) VALUES (?, ?, ?, ?, ?)`
-  ).run(slug, title.trim(), embedCode.trim(), serviceDate || null, req.session.staffId);
+    `INSERT INTO streams (title, embed_code, service_date, venue_name, venue_address, maps_link,
+       contact_name, contact_phone, arrival_time, crew_notes, kit_id, slug, created_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(...streamFormValues(f), slug, req.session.staffId);
 
   res.redirect(`/admin/streams/${slug}`);
 });
@@ -158,13 +217,44 @@ router.get("/streams/:slug", (req, res) => {
     emails_failed: emailCounts.failed || 0,
   });
 
-  const publicUrl = `${process.env.BASE_URL || "http://localhost:3000"}/watch/${stream.slug}`;
+  const publicUrl = publicUrlFor(stream);
+  const kit = stream.kit_id ? db.prepare("SELECT * FROM kits WHERE id = ?").get(stream.kit_id) : null;
+
+  const assignments = db
+    .prepare(
+      `SELECT sc.*, c.name, c.phone, c.notes AS crew_notes_profile, c.own_vehicle AS crew_own_vehicle
+       FROM stream_crew sc JOIN crew c ON c.id = sc.crew_id
+       WHERE sc.stream_id = ?
+       ORDER BY CASE sc.status WHEN 'confirmed' THEN 0 WHEN 'asked' THEN 1 WHEN 'shortlisted' THEN 2 ELSE 3 END, c.name`
+    )
+    .all(stream.id)
+    .map((a) => {
+      const crew = { name: a.name, phone: a.phone };
+      return {
+        ...a,
+        askLink: msg.waLink(a.phone, msg.availabilityMessage({ stream, crew })),
+        confirmLink: msg.waLink(a.phone, msg.confirmationMessage({ stream, crew, assignment: a, kit, publicUrl })),
+      };
+    });
+
+  const availableCrew = db
+    .prepare(
+      `SELECT * FROM crew WHERE active = 1
+       AND id NOT IN (SELECT crew_id FROM stream_crew WHERE stream_id = ?)
+       ORDER BY name`
+    )
+    .all(stream.id);
 
   res.render("admin/stream-detail", {
     stream,
     viewers,
     publicUrl,
     status,
+    kit,
+    clashes: kitClashes(stream),
+    assignments,
+    availableCrew,
+    fmtDateLong: msg.fmtDateLong,
     notice: req.query.notice || null,
   });
 });
@@ -217,25 +307,23 @@ router.post("/streams/:slug/resend-thanks", async (req, res) => {
 router.get("/streams/:slug/edit", (req, res) => {
   const stream = db.prepare("SELECT * FROM streams WHERE slug = ?").get(req.params.slug);
   if (!stream) return res.status(404).send("Stream not found");
-  res.render("admin/edit-stream", { stream, error: null, form: null });
+  res.render("admin/edit-stream", { stream, error: null, form: null, kits: allKits() });
 });
 
 router.post("/streams/:slug/edit", (req, res) => {
   const stream = db.prepare("SELECT * FROM streams WHERE slug = ?").get(req.params.slug);
   if (!stream) return res.status(404).send("Stream not found");
 
-  const { title, embedCode, serviceDate } = req.body;
-  if (!title || !title.trim() || !embedCode || !embedCode.trim()) {
-    return res.render("admin/edit-stream", {
-      stream,
-      error: "Please provide both a title and the embed code.",
-      form: req.body,
-    });
+  const { f, error } = readStreamForm(req.body);
+  if (error) {
+    return res.render("admin/edit-stream", { stream, error, form: f, kits: allKits() });
   }
 
   db.prepare(
-    `UPDATE streams SET title = ?, embed_code = ?, service_date = ? WHERE id = ?`
-  ).run(title.trim(), embedCode.trim(), serviceDate || null, stream.id);
+    `UPDATE streams SET title = ?, embed_code = ?, service_date = ?, venue_name = ?, venue_address = ?,
+       maps_link = ?, contact_name = ?, contact_phone = ?, arrival_time = ?, crew_notes = ?, kit_id = ?
+     WHERE id = ?`
+  ).run(...streamFormValues(f), stream.id);
 
   res.redirect(`/admin/streams/${stream.slug}?notice=updated`);
 });
@@ -250,11 +338,183 @@ router.post("/streams/:slug/delete", (req, res) => {
     db.prepare("DELETE FROM email_logs WHERE stream_id = ?").run(streamId);
     db.prepare("DELETE FROM chat_messages WHERE stream_id = ?").run(streamId);
     db.prepare("DELETE FROM stream_views WHERE stream_id = ?").run(streamId);
+    db.prepare("DELETE FROM stream_crew WHERE stream_id = ?").run(streamId);
     db.prepare("DELETE FROM streams WHERE id = ?").run(streamId);
   });
   deleteAll(stream.id);
 
   res.redirect("/admin?notice=deleted");
+});
+
+// --- Operators on a funeral ---
+
+function findStream(req, res) {
+  const stream = db.prepare("SELECT * FROM streams WHERE slug = ?").get(req.params.slug);
+  if (!stream) res.status(404).send("Stream not found");
+  return stream;
+}
+
+router.post("/streams/:slug/crew/add", (req, res) => {
+  const stream = findStream(req, res);
+  if (!stream) return;
+  const ids = [].concat(req.body.crewIds || []).map((n) => parseInt(n, 10)).filter(Boolean);
+  const insert = db.prepare(
+    `INSERT OR IGNORE INTO stream_crew (stream_id, crew_id, uses_own_vehicle)
+     SELECT ?, id, own_vehicle FROM crew WHERE id = ? AND active = 1`
+  );
+  for (const id of ids) insert.run(stream.id, id);
+  res.redirect(`/admin/streams/${stream.slug}#crew`);
+});
+
+// action: ask | confirm | decline | reset | remove | vehicle-yes | vehicle-no
+router.post("/streams/:slug/crew/:id/:action", (req, res) => {
+  const stream = findStream(req, res);
+  if (!stream) return;
+  const id = parseInt(req.params.id, 10);
+  const where = "WHERE id = ? AND stream_id = ?";
+  const run = (sql) => db.prepare(sql + " " + where).run(id, stream.id);
+
+  switch (req.params.action) {
+    case "ask":
+      // Don't downgrade someone already confirmed if the button is clicked again.
+      run(`UPDATE stream_crew SET status = CASE WHEN status = 'confirmed' THEN status ELSE 'asked' END,
+             asked_at = COALESCE(asked_at, datetime('now'))`);
+      break;
+    case "confirm":
+      run(`UPDATE stream_crew SET status = 'confirmed', confirmed_at = datetime('now')`);
+      break;
+    case "decline":
+      run(`UPDATE stream_crew SET status = 'declined'`);
+      break;
+    case "reset":
+      run(`UPDATE stream_crew SET status = 'shortlisted', confirmed_at = NULL`);
+      break;
+    case "remove":
+      db.prepare("DELETE FROM stream_crew " + where).run(id, stream.id);
+      break;
+    case "vehicle-yes":
+      run(`UPDATE stream_crew SET uses_own_vehicle = 1`);
+      break;
+    case "vehicle-no":
+      run(`UPDATE stream_crew SET uses_own_vehicle = 0`);
+      break;
+    default:
+      return res.status(400).send("Unknown action");
+  }
+  res.redirect(`/admin/streams/${stream.slug}#crew`);
+});
+
+// --- Crew (camera operators) ---
+
+router.get("/crew", (req, res) => {
+  const crew = db
+    .prepare(
+      `SELECT c.*,
+         (SELECT COUNT(*) FROM stream_crew sc JOIN streams s ON s.id = sc.stream_id
+            WHERE sc.crew_id = c.id AND sc.status = 'confirmed' AND s.ended_at IS NULL) AS upcoming
+       FROM crew c WHERE c.active = 1 ORDER BY c.name`
+    )
+    .all();
+  const editing = req.query.edit ? crew.find((c) => c.id === parseInt(req.query.edit, 10)) || null : null;
+  res.render("admin/crew", { crew, editing, error: null, form: {}, notice: req.query.notice || null });
+});
+
+function readCrewForm(body) {
+  const f = {
+    name: String(body.name || "").trim(),
+    phone: String(body.phone || "").trim(),
+    ownVehicle: body.ownVehicle === "1" ? 1 : 0,
+    notes: String(body.notes || "").trim(),
+  };
+  let error = null;
+  if (!f.name || !f.phone) error = "Please enter a name and a WhatsApp number.";
+  else if (msg.waNumber(f.phone).length < 10) error = "That WhatsApp number looks too short — use e.g. 082 123 4567.";
+  return { f, error };
+}
+
+function renderCrewError(res, error, form, editing) {
+  const crew = db.prepare("SELECT *, 0 AS upcoming FROM crew WHERE active = 1 ORDER BY name").all();
+  res.render("admin/crew", { crew, editing, error, form, notice: null });
+}
+
+router.post("/crew", (req, res) => {
+  const { f, error } = readCrewForm(req.body);
+  if (error) return renderCrewError(res, error, f, null);
+  db.prepare("INSERT INTO crew (name, phone, own_vehicle, notes) VALUES (?, ?, ?, ?)").run(
+    f.name, f.phone, f.ownVehicle, f.notes || null
+  );
+  res.redirect("/admin/crew?notice=added");
+});
+
+router.post("/crew/:id/edit", (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const existing = db.prepare("SELECT * FROM crew WHERE id = ? AND active = 1").get(id);
+  if (!existing) return res.status(404).send("Crew member not found");
+  const { f, error } = readCrewForm(req.body);
+  if (error) return renderCrewError(res, error, f, existing);
+  db.prepare("UPDATE crew SET name = ?, phone = ?, own_vehicle = ?, notes = ? WHERE id = ?").run(
+    f.name, f.phone, f.ownVehicle, f.notes || null, id
+  );
+  res.redirect("/admin/crew?notice=updated");
+});
+
+// Hidden rather than deleted, so past funerals still show who worked them.
+router.post("/crew/:id/remove", (req, res) => {
+  db.prepare("UPDATE crew SET active = 0 WHERE id = ?").run(parseInt(req.params.id, 10));
+  res.redirect("/admin/crew?notice=removed");
+});
+
+// --- Calendar ---
+
+router.get("/calendar", (req, res) => {
+  const now = new Date();
+  const m = /^(\d{4})-(\d{2})$/.exec(req.query.month || "");
+  const year = m ? +m[1] : now.getFullYear();
+  const month = m ? +m[2] : now.getMonth() + 1; // 1-12
+  const pad = (n) => String(n).padStart(2, "0");
+  const monthKey = `${year}-${pad(month)}`;
+
+  const streams = db
+    .prepare(
+      `SELECT s.slug, s.title, s.service_date, s.venue_name, s.ended_at, k.name AS kit_name,
+         (SELECT GROUP_CONCAT(c.name, ', ') FROM stream_crew sc JOIN crew c ON c.id = sc.crew_id
+            WHERE sc.stream_id = s.id AND sc.status = 'confirmed') AS crew_confirmed,
+         (SELECT COUNT(*) FROM stream_crew sc WHERE sc.stream_id = s.id AND sc.status = 'asked') AS crew_asked
+       FROM streams s LEFT JOIN kits k ON k.id = s.kit_id
+       WHERE substr(s.service_date, 1, 7) = ?
+       ORDER BY s.service_date`
+    )
+    .all(monthKey);
+
+  const byDay = {};
+  for (const s of streams) {
+    const p = msg.parseServiceDate(s.service_date);
+    if (!p) continue;
+    (byDay[p.day] = byDay[p.day] || []).push({ ...s, time: p.time });
+  }
+
+  // Monday-first grid.
+  const first = new Date(Date.UTC(year, month - 1, 1));
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const leading = (first.getUTCDay() + 6) % 7;
+  const cells = [];
+  for (let i = 0; i < leading; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+  while (cells.length % 7) cells.push(null);
+
+  const prev = month === 1 ? `${year - 1}-12` : `${year}-${pad(month - 1)}`;
+  const next = month === 12 ? `${year + 1}-01` : `${year}-${pad(month + 1)}`;
+  const todayKey = `${now.getFullYear()}-${pad(now.getMonth() + 1)}`;
+
+  res.render("admin/calendar", {
+    cells,
+    byDay,
+    monthLabel: `${["January","February","March","April","May","June","July","August","September","October","November","December"][month - 1]} ${year}`,
+    prev,
+    next,
+    today: monthKey === todayKey ? now.getDate() : null,
+    total: streams.length,
+  });
 });
 
 // --- Broadcast ---
