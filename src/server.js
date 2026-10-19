@@ -45,6 +45,7 @@ app.get("/", (req, res) => res.redirect("/admin"));
 app.use("/admin", adminRoutes);
 app.use("/watch", watchRoutes);
 app.use("/unsubscribe", unsubscribeRoutes);
+app.use("/api", require("./routes/feed")); // calendar feed for Orange Platform
 
 app.use((req, res) => res.status(404).send("Not found"));
 
