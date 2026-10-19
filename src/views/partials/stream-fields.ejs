@@ -8,13 +8,20 @@
   <label for="serviceDate">Service date &amp; start time</label>
   <input type="datetime-local" id="serviceDate" name="serviceDate" required value="<%= f.serviceDate || '' %>" />
 
-  <label for="embedCode">YoloLive embed code</label>
-  <textarea id="embedCode" name="embedCode" required placeholder="<iframe src=&quot;https://...&quot; ...></iframe>"><%= f.embedCode || '' %></textarea>
-  <p class="help">Paste the full snippet YoloLive gives you for this stream, exactly as copied.</p>
+  <label for="embedCode">YoloLive embed code <span class="legend-note">optional — can be added later</span></label>
+  <textarea id="embedCode" name="embedCode" class="short" placeholder="<iframe src=&quot;https://...&quot; ...></iframe>"><%= f.embedCode || '' %></textarea>
+  <p class="help">Paste the full snippet YoloLive gives you, exactly as copied. Leave it empty to save the funeral now — viewers will see "the livestream will appear here" until you add it under <strong>Edit</strong>.</p>
 </fieldset>
 
 <fieldset class="form-section">
   <legend>Funeral details <span class="legend-note">staff &amp; crew only — never shown to viewers</span></legend>
+
+  <label for="branch">Branch</label>
+  <select id="branch" name="branch">
+    <option value="pretoria" <%= f.branch !== "capetown" ? "selected" : "" %>>Pretoria</option>
+    <option value="capetown" <%= f.branch === "capetown" ? "selected" : "" %>>Cape Town</option>
+  </select>
+  <p class="help">Decides which bank account appears on this funeral's quote and invoice.</p>
 
   <div class="grid-2">
     <div>
@@ -57,6 +64,36 @@
       </select>
     </div>
   </div>
+
+  <label>Extra gear <span class="legend-note">on top of the kit — included in the operator's brief</span></label>
+  <div id="gearRows" class="gear-rows">
+    <% const gearRows = (f.gear && f.gear.length) ? f.gear : [{ item: "", qty: "" }]; %>
+    <% gearRows.forEach(g => { %>
+      <div class="gear-row">
+        <input type="text" name="gearItem" placeholder="e.g. Extra wireless mic, TV screen, extension reel" value="<%= g.item || '' %>" />
+        <input type="text" name="gearQty" class="qty" placeholder="Qty" value="<%= g.qty || '' %>" />
+        <button type="button" class="link-btn gear-remove" title="Remove line">✕</button>
+      </div>
+    <% }) %>
+  </div>
+  <button type="button" class="btn small secondary" id="addGear">+ Add gear line</button>
+  <script>
+    (function () {
+      const rows = document.getElementById("gearRows");
+      document.getElementById("addGear").addEventListener("click", () => {
+        const row = rows.querySelector(".gear-row").cloneNode(true);
+        row.querySelectorAll("input").forEach((i) => (i.value = ""));
+        rows.appendChild(row);
+        row.querySelector("input").focus();
+      });
+      rows.addEventListener("click", (e) => {
+        if (!e.target.classList.contains("gear-remove")) return;
+        const row = e.target.closest(".gear-row");
+        if (rows.querySelectorAll(".gear-row").length > 1) row.remove();
+        else row.querySelectorAll("input").forEach((i) => (i.value = ""));
+      });
+    })();
+  </script>
 
   <label for="leadSource">Where did this funeral come from?</label>
   <input type="text" id="leadSource" name="leadSource" list="leadSources" placeholder="e.g. AVBOB Centurion, NG Kerk, referral from…" value="<%= f.leadSource || '' %>" />

@@ -168,6 +168,8 @@ db.exec(`
 {
   const existing = new Set(db.prepare("PRAGMA table_info(streams)").all().map((c) => c.name));
   if (!existing.has("lead_source")) db.exec("ALTER TABLE streams ADD COLUMN lead_source TEXT");
+  if (!existing.has("extra_gear")) db.exec("ALTER TABLE streams ADD COLUMN extra_gear TEXT");  // JSON [{item, qty}]
+  if (!existing.has("branch")) db.exec("ALTER TABLE streams ADD COLUMN branch TEXT NOT NULL DEFAULT 'pretoria'");
   const docCols = new Set(db.prepare("PRAGMA table_info(documents)").all().map((c) => c.name));
   if (!docCols.has("prepared_by")) db.exec("ALTER TABLE documents ADD COLUMN prepared_by INTEGER REFERENCES staff(id)");
 }
@@ -181,12 +183,24 @@ db.exec(`
     business_phone: "071 325 8694",
     business_email: "johan@orangeproductions.co.za",
     business_website: "www.orangeproductions.co.za",
-    bank_name: "Nedbank",
-    bank_account_holder: "Orange",
-    bank_account_number: "1346824681",
-    bank_branch_code: "198765",
-    bank_account_type: "",
-    bank_swift: "NEDSZAJJ",
+    // Pretoria branch
+    bank_name: "Standard Bank",
+    bank_branch_name: "Centurion Mall",
+    bank_account_holder: "Orange Live",
+    bank_account_number: "10 14 701 917 4",
+    bank_branch_code: "012645",
+    bank_account_type: "Current",
+    bank_swift: "SBZAZAJJ",
+    // Cape Town branch
+    ct_bank_name: "Capitec",
+    ct_bank_branch_name: "",
+    ct_bank_account_holder: "Orange Broadcast",
+    ct_bank_account_number: "1055880003",
+    ct_bank_branch_code: "",
+    ct_bank_account_type: "Current",
+    ct_bank_swift: "CABLZAJJ",
+    // Added to the end of the operator's confirmation WhatsApp.
+    crew_guidelines_message: "Hi,\nHere's the file \"Orange Cape Town - Funeral Streaming - Freelancer Guidelines and Protocol Document.pdf\" for your review.\nhttps://acrobat.adobe.com/id/urn:aaid:sc:EU:d102ec77-fcf5-4457-b358-34c4ee039d1b\n\nAdd your comments and collaborate with others in real time. You don't need to download Acrobat to access the file.",
     package_label: "Budget Streaming Package",
     package_details:
       "Camera & Streaming Operator (1 person)\nFuneral Streaming Kit – professional Panasonic camera, wireless streaming devices with internet\nSound Kit",
@@ -202,6 +216,19 @@ db.exec(`
      ON CONFLICT(key) DO UPDATE SET value = excluded.value WHERE settings.value IS NULL OR settings.value = ''`
   );
   for (const [k, v] of Object.entries(defaults)) ins.run(k, v);
+
+  // One-off update (Oct 2026): replace the earlier Nedbank details with
+  // the Standard Bank (Pretoria) account. Runs once, then never again,
+  // so later edits on the Settings page are kept.
+  const version = parseInt((db.prepare("SELECT value FROM settings WHERE key = 'settings_version'").get() || {}).value || "1", 10);
+  if (version < 2) {
+    const set = db.prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value");
+    for (const k of ["bank_name", "bank_branch_name", "bank_account_holder", "bank_account_number",
+                     "bank_branch_code", "bank_account_type", "bank_swift"]) {
+      set.run(k, defaults[k]);
+    }
+    set.run("settings_version", "2");
+  }
 }
 
 // The three funeral kits. Safe to run every boot.

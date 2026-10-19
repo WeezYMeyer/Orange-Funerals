@@ -12,6 +12,8 @@ const f = form || {
   crewNotes: stream.crew_notes,
   kitId: stream.kit_id,
   leadSource: stream.lead_source,
+  branch: stream.branch,
+  gear: (() => { try { return JSON.parse(stream.extra_gear || "[]"); } catch (e) { return []; } })(),
 };
 %>
 <%- include("../partials/admin-head", { title: "Edit " + stream.title }) %>

@@ -720,3 +720,11 @@ td.overdue { color: var(--danger); font-weight: 600; }
 .signed-in { color: var(--muted-soft); font-weight: 400; }
 .inline-form { display: flex; gap: 8px; align-items: center; margin: 0; }
 .inline-form input { padding: 7px 10px; font-size: 14px; max-width: 200px; }
+
+/* Extra gear rows & pending video (Oct 2026) */
+.gear-rows { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.gear-row { display: grid; grid-template-columns: 1fr 80px 28px; gap: 8px; align-items: center; }
+.gear-row .gear-remove { text-decoration: none; font-size: 15px; }
+.video-pending { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; background: #2b2b2b; color: #f1efea; padding: 20px; }
+.video-pending strong { display: block; font-family: var(--serif); font-weight: 500; font-size: 20px; margin-bottom: 6px; }
+.video-pending span { font-size: 14px; color: #cfcac2; }

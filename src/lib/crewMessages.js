@@ -77,7 +77,7 @@ function availabilityMessage({ stream, crew }) {
 }
 
 /** Second message, after they've said yes: the full brief. */
-function confirmationMessage({ stream, crew, assignment, kit, publicUrl }) {
+function confirmationMessage({ stream, crew, assignment, kit, publicUrl, guidelines }) {
   const lines = [
     `✅ CONFIRMED – ${stream.title}`,
     ``,
@@ -92,6 +92,10 @@ function confirmationMessage({ stream, crew, assignment, kit, publicUrl }) {
     lines.push(`👤 Client contact: ${[stream.contact_name, stream.contact_phone].filter(Boolean).join(" – ")}`);
   }
   lines.push(`🎒 Kit: ${kit ? kit.name : "To be confirmed"}`);
+  if (stream.gear && stream.gear.length) {
+    lines.push(`➕ Extra gear:`);
+    for (const g of stream.gear) lines.push(`   • ${g.qty ? g.qty + " × " : ""}${g.item}`);
+  }
   lines.push(
     assignment.uses_own_vehicle
       ? `🚗 Transport: you're driving your own vehicle`
@@ -102,6 +106,9 @@ function confirmationMessage({ stream, crew, assignment, kit, publicUrl }) {
     lines.push(``, `📝 Notes:`, stream.crew_notes.trim());
   }
   lines.push(``, `Please reply to confirm you've received this.`);
+  if (guidelines && guidelines.trim()) {
+    lines.push(``, `———`, ``, guidelines.trim());
+  }
   return lines.join("\n");
 }
 

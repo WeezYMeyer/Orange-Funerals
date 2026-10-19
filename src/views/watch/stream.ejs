@@ -14,9 +14,17 @@
 <div class="watch-hero">
   <div class="eyebrow">In Loving Memory</div>
   <h1><%= stream.title %></h1>
-  <% if (stream.service_date) { %>
-    <div class="subtitle"><%= new Date(stream.service_date).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" }) %></div>
-  <% } %>
+  <% if (stream.service_date) {
+       // service_date is "YYYY-MM-DDTHH:MM" in South African time; format it
+       // from its parts so the server's timezone never shifts it.
+       const m = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?/.exec(stream.service_date);
+       if (m) {
+         const days = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+         const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+         const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+         const when = `${days[d.getUTCDay()]} ${+m[3]} ${months[+m[2] - 1]} ${m[1]}` + (m[4] ? ` · ${m[4]}:${m[5]}` : ""); %>
+    <div class="subtitle"><%= when %></div>
+  <% } } %>
   <% if (stream.ended_at) { %>
     <div class="subtitle" style="margin-top:6px;">This livestream has ended. Thank you for being with us — you can watch the recording below.</div>
   <% } %>
@@ -42,7 +50,16 @@
   <% } else { %>
     <div class="stream-layout">
       <div class="video-wrap">
-        <%- stream.embed_code %>
+        <% if (stream.embed_code && stream.embed_code.trim()) { %>
+          <%- stream.embed_code %>
+        <% } else { %>
+          <div class="video-pending">
+            <div>
+              <strong>The livestream will appear here</strong>
+              <span>Please refresh this page closer to the start of the service.</span>
+            </div>
+          </div>
+        <% } %>
       </div>
       <div class="chat-wrap">
         <div class="chat-header">Live Chat</div>

@@ -3,7 +3,7 @@ const isQuote = doc.kind === "quote";
 const label = isQuote ? "Quote" : "Invoice";
 const transport = transportCents(doc);
 const details = (doc.package_details || "").split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-const hasBank = s.bank_account_number && s.bank_account_number.trim();
+const hasBank = bank.number && bank.number.trim();
 const rate = (doc.transport_rate_cents / 100).toFixed(2);
 %>
 <!doctype html>
@@ -176,14 +176,14 @@ const rate = (doc.transport_rate_cents / 100).toFixed(2);
       <div>
         <h3>Banking details</h3>
         <% if (hasBank) { %>
-          <%= s.bank_account_holder %><br/>
-          <%= s.bank_name %><% if (s.bank_account_type) { %> · <%= s.bank_account_type %><% } %><br/>
-          Account no: <strong><%= s.bank_account_number %></strong><br/>
-          <% if (s.bank_branch_code) { %>Branch code: <%= s.bank_branch_code %><br/><% } %>
-          <% if (s.bank_swift) { %>SWIFT: <%= s.bank_swift %><br/><% } %>
+          Account holder: <strong><%= bank.holder %></strong><br/>
+          <%= bank.name %><% if (bank.branchName) { %> · <%= bank.branchName %><% } %><br/>
+          Account no: <strong><%= bank.number %></strong><% if (bank.type) { %> (<%= bank.type %>)<% } %><br/>
+          <% if (bank.branchCode) { %>Branch code: <%= bank.branchCode %><br/><% } %>
+          <% if (bank.swift) { %>SWIFT: <%= bank.swift %><br/><% } %>
           Reference: <strong><%= doc.number %></strong>
         <% } else { %>
-          <span class="missing">Add your banking details under Business settings.</span>
+          <span class="missing">Add the <%= bank.label %> banking details under Business settings.</span>
         <% } %>
       </div>
       <div>

@@ -177,9 +177,17 @@ router.get(`/streams/:slug/${KIND}`, (req, res) => {
   const preparer = db
     .prepare("SELECT name, email FROM staff WHERE id = ?")
     .get(doc.prepared_by || req.session.staffId);
+  const all = getSettings();
+  const p = stream.branch === "capetown" ? "ct_bank_" : "bank_";
+  const bank = {
+    name: all[p + "name"], branchName: all[p + "branch_name"], holder: all[p + "account_holder"],
+    number: all[p + "account_number"], branchCode: all[p + "branch_code"], type: all[p + "account_type"],
+    swift: all[p + "swift"], label: stream.branch === "capetown" ? "Cape Town" : "Pretoria",
+  };
   res.render("admin/document-view", {
     stream,
     doc,
+    bank,
     preparer: preparer ? { name: preparer.name, email: preparer.email.replace(/\.removed\.\d+$/, "") } : null,
     s: getSettings(),
     serviceDateText: stream.service_date ? fmtDateLong(stream.service_date) : null,
@@ -278,7 +286,9 @@ router.get("/finance", (req, res) => {
 
 const SETTING_FIELDS = [
   "business_name", "business_address", "business_phone", "business_email", "business_website",
-  "bank_name", "bank_account_holder", "bank_account_number", "bank_branch_code", "bank_account_type", "bank_swift",
+  "bank_name", "bank_branch_name", "bank_account_holder", "bank_account_number", "bank_branch_code", "bank_account_type", "bank_swift",
+  "ct_bank_name", "ct_bank_branch_name", "ct_bank_account_holder", "ct_bank_account_number", "ct_bank_branch_code",
+  "ct_bank_account_type", "ct_bank_swift", "crew_guidelines_message",
   "package_label", "package_details", "package_price", "transport_rate",
   "quote_valid_days", "invoice_due_days", "payment_terms", "vat_note",
 ];

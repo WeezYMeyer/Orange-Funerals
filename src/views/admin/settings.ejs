@@ -8,13 +8,26 @@ const groups = [
     field("business_email", "Email"),
     field("business_website", "Website"),
   ]],
-  ["Banking details (shown on quotes & invoices)", [
+  ["Pretoria branch – banking details (used when a funeral's branch is Pretoria)", [
     field("bank_account_holder", "Account holder"),
     field("bank_name", "Bank", { placeholder: "e.g. FNB" }),
+    field("bank_branch_name", "Branch name"),
     field("bank_account_type", "Account type", { placeholder: "e.g. Cheque / Business" }),
     field("bank_account_number", "Account number"),
     field("bank_branch_code", "Branch code"),
     field("bank_swift", "SWIFT code (for international payments)"),
+  ]],
+  ["Cape Town branch – banking details (used when a funeral's branch is Cape Town)", [
+    field("ct_bank_account_holder", "Account holder"),
+    field("ct_bank_name", "Bank"),
+    field("ct_bank_branch_name", "Branch name"),
+    field("ct_bank_account_type", "Account type"),
+    field("ct_bank_account_number", "Account number"),
+    field("ct_bank_branch_code", "Branch code"),
+    field("ct_bank_swift", "SWIFT code"),
+  ]],
+  ["Operator confirmation WhatsApp", [
+    field("crew_guidelines_message", "Added to the end of every confirmation brief (leave empty to switch off)", { textarea: true }),
   ]],
   ["Default package & pricing (pre-filled on every new quote)", [
     field("package_label", "Package name"),

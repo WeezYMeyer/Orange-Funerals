@@ -41,6 +41,24 @@ function publicUrlFor(stream) {
   return `${process.env.BASE_URL || "http://localhost:3000"}/watch/${stream.slug}`;
 }
 
+// Extra gear rows: gearItem[] + gearQty[] -> [{ item, qty }]
+function readGear(body) {
+  const items = [].concat(body.gearItem || []);
+  const qtys = [].concat(body.gearQty || []);
+  return items
+    .map((item, i) => ({ item: String(item || "").trim().slice(0, 120), qty: String(qtys[i] || "").trim().slice(0, 10) }))
+    .filter((g) => g.item);
+}
+
+function parseGear(json) {
+  try {
+    const g = JSON.parse(json || "[]");
+    return Array.isArray(g) ? g : [];
+  } catch {
+    return [];
+  }
+}
+
 // Reads and validates the stream form (title, embed, date + funeral details).
 function readStreamForm(body) {
   const clean = (v) => (typeof v === "string" ? v.trim() : "");
@@ -57,10 +75,11 @@ function readStreamForm(body) {
     crewNotes: clean(body.crewNotes),
     kitId: body.kitId ? parseInt(body.kitId, 10) || null : null,
     leadSource: clean(body.leadSource),
+    branch: body.branch === "capetown" ? "capetown" : "pretoria",
+    gear: readGear(body),
   };
   const missing = [];
   if (!f.title) missing.push("title");
-  if (!f.embedCode) missing.push("YoloLive embed code");
   if (!f.serviceDate) missing.push("service date & time");
   if (!f.venueName) missing.push("venue name");
   if (!f.mapsLink) missing.push("Google Maps link");
@@ -73,7 +92,8 @@ function readStreamForm(body) {
 function streamFormValues(f) {
   return [f.title, f.embedCode, f.serviceDate || null, f.venueName || null, f.venueAddress || null,
     f.mapsLink || null, f.contactName || null, f.contactPhone || null, f.arrivalTime || null,
-    f.crewNotes || null, f.kitId, f.leadSource || null];
+    f.crewNotes || null, f.kitId, f.leadSource || null,
+    f.gear.length ? JSON.stringify(f.gear) : null, f.branch];
 }
 
 // Other funerals on the same day using the same kit.
@@ -184,8 +204,8 @@ router.post("/streams/new", (req, res) => {
   const slug = makeUniqueSlug(f.title);
   db.prepare(
     `INSERT INTO streams (title, embed_code, service_date, venue_name, venue_address, maps_link,
-       contact_name, contact_phone, arrival_time, crew_notes, kit_id, lead_source, slug, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       contact_name, contact_phone, arrival_time, crew_notes, kit_id, lead_source, extra_gear, branch, slug, created_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(...streamFormValues(f), slug, req.session.staffId);
 
   res.redirect(`/admin/streams/${slug}`);
@@ -231,6 +251,8 @@ router.get("/streams/:slug", (req, res) => {
   });
 
   const publicUrl = publicUrlFor(stream);
+  stream.gear = parseGear(stream.extra_gear);
+  const guidelines = (db.prepare("SELECT value FROM settings WHERE key = 'crew_guidelines_message'").get() || {}).value || "";
   const kit = stream.kit_id ? db.prepare("SELECT * FROM kits WHERE id = ?").get(stream.kit_id) : null;
 
   const assignments = db
@@ -246,7 +268,7 @@ router.get("/streams/:slug", (req, res) => {
       return {
         ...a,
         askLink: msg.waLink(a.phone, msg.availabilityMessage({ stream, crew })),
-        confirmLink: msg.waLink(a.phone, msg.confirmationMessage({ stream, crew, assignment: a, kit, publicUrl })),
+        confirmLink: msg.waLink(a.phone, msg.confirmationMessage({ stream, crew, assignment: a, kit, publicUrl, guidelines })),
       };
     });
 
@@ -338,7 +360,7 @@ router.post("/streams/:slug/edit", (req, res) => {
   db.prepare(
     `UPDATE streams SET title = ?, embed_code = ?, service_date = ?, venue_name = ?, venue_address = ?,
        maps_link = ?, contact_name = ?, contact_phone = ?, arrival_time = ?, crew_notes = ?, kit_id = ?,
-       lead_source = ?
+       lead_source = ?, extra_gear = ?, branch = ?
      WHERE id = ?`
   ).run(...streamFormValues(f), stream.id);
 
