@@ -41,12 +41,22 @@ function publicUrlFor(stream) {
   return `${process.env.BASE_URL || "http://localhost:3000"}/watch/${stream.slug}`;
 }
 
-// Extra gear rows: gearItem[] + gearQty[] -> [{ item, qty }]
+// Extra gear rows: gearItem[] + gearQty[] + gearPrice[] -> [{ item, qty, price_cents }]
+// Entered once on the funeral; quotes and invoices pull these lines in automatically.
 function readGear(body) {
   const items = [].concat(body.gearItem || []);
   const qtys = [].concat(body.gearQty || []);
+  const prices = [].concat(body.gearPrice || []);
+  const cents = (v) => {
+    const n = parseFloat(String(v || "").replace(/[R\s]/gi, "").replace(",", "."));
+    return Number.isFinite(n) && n > 0 ? Math.round(n * 100) : 0;
+  };
   return items
-    .map((item, i) => ({ item: String(item || "").trim().slice(0, 120), qty: String(qtys[i] || "").trim().slice(0, 10) }))
+    .map((item, i) => ({
+      item: String(item || "").trim().slice(0, 120),
+      qty: String(qtys[i] || "").trim().slice(0, 10),
+      price_cents: cents(prices[i]),
+    }))
     .filter((g) => g.item);
 }
 
@@ -145,7 +155,8 @@ router.use((req, res, next) => {
 });
 
 // Quotes, invoices, finance & business settings.
-router.use(require("./billing"));
+const billing = require("./billing");
+router.use(billing);
 
 // --- Dashboard ---
 // Two tabs: "Upcoming" (default — anything not yet ended, i.e. still to
@@ -209,6 +220,8 @@ router.post("/streams/new", (req, res) => {
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(...streamFormValues(f), slug, req.session.staffId);
 
+  const created = db.prepare("SELECT id FROM streams WHERE slug = ?").get(slug);
+  if (created) billing.syncDocsForStream(created.id);
   res.redirect(`/admin/streams/${slug}`);
 });
 
@@ -368,6 +381,7 @@ router.post("/streams/:slug/edit", (req, res) => {
      WHERE id = ?`
   ).run(...streamFormValues(f), stream.id);
   broadcastChatState(req, stream.slug, f.chatEnabled);
+  billing.syncDocsForStream(stream.id); // gear changes flow into the quote/invoice
 
   res.redirect(`/admin/streams/${stream.slug}?notice=updated`);
 });

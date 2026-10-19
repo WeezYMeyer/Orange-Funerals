@@ -48,11 +48,87 @@ function fmtYmd(ymd) {
   return fmtDateLong(ymd).replace(/^\w+ /, ""); // "16 October 2026"
 }
 
+// Extra lines (gear, USB copies, …): [{ label, qty, unit_cents }]
+function lineCents(it) {
+  return Math.round((Number(it.qty) || 0) * (Number(it.unit_cents) || 0));
+}
+function itemsCents(items) {
+  return items.reduce((sum, it) => sum + lineCents(it), 0);
+}
+// Older documents had a single extra_label/extra_cents line.
+function docItems(doc) {
+  try {
+    const items = JSON.parse(doc.extra_items || "null");
+    if (Array.isArray(items)) return items;
+  } catch {}
+  return doc.extra_label ? [{ label: doc.extra_label, qty: 1, unit_cents: doc.extra_cents || 0 }] : [];
+}
+// The funeral's extra gear (entered once, on the funeral) as quote lines.
+function parseGearJson(json) {
+  try {
+    const g = JSON.parse(json || "[]");
+    return Array.isArray(g) ? g : [];
+  } catch {
+    return [];
+  }
+}
+function gearToItems(stream) {
+  return parseGearJson(stream.extra_gear).map((g) => ({
+    label: g.item,
+    qty: parseFloat(String(g.qty || "1").replace(",", ".")) || 1,
+    unit_cents: Number(g.price_cents) || 0,
+  }));
+}
+function docGear(doc) {
+  return parseGearJson(doc.gear_items);
+}
+// Drop "other items" that are really funeral gear, so nothing is charged twice.
+function withoutGear(items, gear) {
+  const names = new Set(gear.map((g) => String(g.label).trim().toLowerCase()));
+  return items.filter((it) => !names.has(String(it.label).trim().toLowerCase()));
+}
+function isFrozen(doc) {
+  return doc.kind === "invoice" && Boolean(doc.paid_at); // paid invoices never change
+}
+
+// Re-pull the funeral's gear into its quote and unpaid invoice and fix their totals.
+// Called whenever the funeral or one of its documents is saved.
+function syncDocsForStream(streamId) {
+  const stream = db.prepare("SELECT * FROM streams WHERE id = ?").get(streamId);
+  if (!stream) return;
+  const docs = db.prepare("SELECT * FROM documents WHERE stream_id = ?").all(streamId);
+
+  // One-off tidy-up for documents made before gear had prices on the funeral:
+  // if a gear line has no price but a document already priced the same item,
+  // carry that price over to the funeral.
+  const rawGear = parseGearJson(stream.extra_gear);
+  let gearChanged = false;
+  for (const g of rawGear) {
+    if (Number(g.price_cents)) continue;
+    for (const d of docs) {
+      const hit = docItems(d).find((it) => String(it.label).trim().toLowerCase() === String(g.item).trim().toLowerCase() && it.unit_cents);
+      if (hit) { g.price_cents = hit.unit_cents; gearChanged = true; break; }
+    }
+  }
+  if (gearChanged) {
+    stream.extra_gear = JSON.stringify(rawGear);
+    db.prepare("UPDATE streams SET extra_gear = ? WHERE id = ?").run(stream.extra_gear, stream.id);
+  }
+
+  const gear = gearToItems(stream);
+  const upd = db.prepare("UPDATE documents SET gear_items = ?, extra_items = ?, total_cents = ? WHERE id = ?");
+  for (const d of docs) {
+    if (isFrozen(d)) continue;
+    const doc = { ...d, gear, items: withoutGear(docItems(d), gear) };
+    upd.run(JSON.stringify(gear), JSON.stringify(doc.items), totalCents(doc), d.id);
+  }
+}
+
 function transportCents(doc) {
   return doc.charge_transport ? Math.round(doc.transport_km * doc.transport_rate_cents) : 0;
 }
 function totalCents(doc) {
-  return doc.package_cents + transportCents(doc) + (doc.extra_label ? doc.extra_cents : 0);
+  return doc.package_cents + transportCents(doc) + itemsCents(doc.gear || []) + itemsCents(doc.items || []);
 }
 
 function nextNumber(kind) {
@@ -68,7 +144,12 @@ function loadStream(req, res) {
   return stream;
 }
 function loadDoc(stream, kind) {
-  return db.prepare("SELECT * FROM documents WHERE stream_id = ? AND kind = ?").get(stream.id, kind);
+  const doc = db.prepare("SELECT * FROM documents WHERE stream_id = ? AND kind = ?").get(stream.id, kind);
+  if (doc) {
+    doc.items = docItems(doc);
+    doc.gear = docGear(doc);
+  }
+  return doc;
 }
 
 // A starting point for a new quote/invoice: copy the quote if there is
@@ -97,11 +178,14 @@ function draftFor(stream, kind) {
     charge_transport: 0,
     transport_km: 0,
     transport_rate_cents: toCents(s.transport_rate),
-    extra_label: "",
-    extra_cents: 0,
+    items: [],
     notes: "",
   };
-  return { ...base, id: null, kind, number: null, issue_date: issue, due_date: due, paid_at: null };
+  const gear = gearToItems(stream); // always the funeral's current gear
+  return {
+    ...base, id: null, kind, number: null, issue_date: issue, due_date: due, paid_at: null,
+    gear, items: withoutGear(base.items || [], gear),
+  };
 }
 
 function readDocForm(body) {
@@ -118,17 +202,27 @@ function readDocForm(body) {
     charge_transport: body.chargeTransport === "1" ? 1 : 0,
     transport_km: toNumber(body.transportKm),
     transport_rate_cents: toCents(body.transportRate),
-    extra_label: String(body.extraLabel || "").trim(),
-    extra_cents: toCents(body.extraAmount),
+    extra_label: null,
+    extra_cents: 0,
     notes: String(body.notes || "").trim(),
   };
-  if (!doc.extra_label) doc.extra_cents = 0;
+  const labels = [].concat(body.itemLabel || []);
+  const qtys = [].concat(body.itemQty || []);
+  const prices = [].concat(body.itemPrice || []);
+  doc.items = labels
+    .map((l, i) => ({
+      label: String(l || "").trim().slice(0, 200),
+      qty: toNumber(qtys[i]) || 1,
+      unit_cents: toCents(prices[i]),
+    }))
+    .filter((it) => it.label);
+  doc.extra_items = JSON.stringify(doc.items);
   doc.total_cents = totalCents(doc);
   const error = !doc.bill_to_name ? "Please enter who the document is addressed to." : null;
   return { doc, error };
 }
 
-const helpers = { fmtR, fmtYmd, transportCents };
+const helpers = { fmtR, fmtYmd, transportCents, lineCents };
 
 // ------------------------------------------------------- quote / invoice
 
@@ -137,6 +231,7 @@ const KIND = ":kind(quote|invoice)";
 router.get(`/streams/:slug/${KIND}/edit`, (req, res) => {
   const stream = loadStream(req, res);
   if (!stream) return;
+  syncDocsForStream(stream.id);
   const doc = loadDoc(stream, req.params.kind) || draftFor(stream, req.params.kind);
   res.render("admin/document-form", { stream, doc, error: null, ...helpers });
 });
@@ -149,21 +244,34 @@ router.post(`/streams/:slug/${KIND}/edit`, (req, res) => {
   const { doc, error } = readDocForm(req.body);
   if (error) {
     return res.render("admin/document-form", {
-      stream, doc: { ...doc, kind, number: existing && existing.number, id: existing && existing.id }, error, ...helpers,
+      stream,
+      doc: { ...doc, gear: existing && isFrozen(existing) ? existing.gear : gearToItems(stream), kind,
+             number: existing && existing.number, id: existing && existing.id, paid_at: existing && existing.paid_at },
+      error, ...helpers,
     });
   }
 
-  const cols = Object.keys(doc);
+  // Gear comes from the funeral (a paid invoice keeps what it was paid on).
+  doc.gear = existing && isFrozen(existing) ? existing.gear : gearToItems(stream);
+  doc.items = withoutGear(doc.items, doc.gear);
+  doc.extra_items = JSON.stringify(doc.items);
+  doc.gear_items = JSON.stringify(doc.gear);
+  doc.total_cents = totalCents(doc);
+
+  const cols = Object.keys(doc).filter((c) => c !== "items" && c !== "gear");
+  const row = { ...doc };
+  delete row.items; // stored as JSON in extra_items
+  delete row.gear;  // stored as JSON in gear_items
   if (existing) {
     db.prepare(
       `UPDATE documents SET ${cols.map((c) => `${c} = @${c}`).join(", ")}, prepared_by = @prepared_by,
          updated_at = datetime('now') WHERE id = @id`
-    ).run({ ...doc, id: existing.id, prepared_by: req.session.staffId });
+    ).run({ ...row, id: existing.id, prepared_by: req.session.staffId });
   } else {
     db.prepare(
       `INSERT INTO documents (stream_id, kind, number, prepared_by, ${cols.join(", ")})
        VALUES (@stream_id, @kind, @number, @prepared_by, ${cols.map((c) => "@" + c).join(", ")})`
-    ).run({ ...doc, stream_id: stream.id, kind, number: nextNumber(kind), prepared_by: req.session.staffId });
+    ).run({ ...row, stream_id: stream.id, kind, number: nextNumber(kind), prepared_by: req.session.staffId });
   }
   res.redirect(`/admin/streams/${stream.slug}/${kind}`);
 });
@@ -172,6 +280,7 @@ router.post(`/streams/:slug/${KIND}/edit`, (req, res) => {
 router.get(`/streams/:slug/${KIND}`, (req, res) => {
   const stream = loadStream(req, res);
   if (!stream) return;
+  syncDocsForStream(stream.id);
   const doc = loadDoc(stream, req.params.kind);
   if (!doc) return res.redirect(`/admin/streams/${stream.slug}/${req.params.kind}/edit`);
   const preparer = db
@@ -198,10 +307,13 @@ router.get(`/streams/:slug/${KIND}`, (req, res) => {
 router.post("/streams/:slug/invoice/:state(paid|unpaid)", (req, res) => {
   const stream = loadStream(req, res);
   if (!stream) return;
+  // Bring the invoice up to date with the funeral before it is frozen (or after unfreezing).
+  if (req.params.state === "paid") syncDocsForStream(stream.id);
   db.prepare("UPDATE documents SET paid_at = ? WHERE stream_id = ? AND kind = 'invoice'").run(
     req.params.state === "paid" ? todaySA() : null,
     stream.id
   );
+  if (req.params.state === "unpaid") syncDocsForStream(stream.id);
   res.redirect(req.get("Referer") || `/admin/streams/${stream.slug}`);
 });
 
@@ -310,3 +422,4 @@ router.post("/settings", (req, res) => {
 });
 
 module.exports = router;
+module.exports.syncDocsForStream = syncDocsForStream;

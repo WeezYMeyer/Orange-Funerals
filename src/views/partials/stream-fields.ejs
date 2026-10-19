@@ -72,13 +72,15 @@
     </div>
   </div>
 
-  <label>Extra gear <span class="legend-note">on top of the kit — included in the operator's brief</span></label>
+  <label>Extra gear <span class="legend-note">on top of the kit — goes into the operator's brief and onto the quote &amp; invoice automatically</span></label>
+  <div class="gear-head"><span>Item</span><span>Qty</span><span>Price each (R)</span><span></span></div>
   <div id="gearRows" class="gear-rows">
-    <% const gearRows = (f.gear && f.gear.length) ? f.gear : [{ item: "", qty: "" }]; %>
+    <% const gearRows = (f.gear && f.gear.length) ? f.gear : [{ item: "", qty: "", price_cents: 0 }]; %>
     <% gearRows.forEach(g => { %>
       <div class="gear-row">
         <input type="text" name="gearItem" placeholder="e.g. Extra wireless mic, TV screen, extension reel" value="<%= g.item || '' %>" />
-        <input type="text" name="gearQty" class="qty" placeholder="Qty" value="<%= g.qty || '' %>" />
+        <input type="text" name="gearQty" class="qty" placeholder="1" value="<%= g.qty || '' %>" />
+        <input type="text" inputmode="decimal" name="gearPrice" placeholder="0 = included" value="<%= g.price_cents ? (g.price_cents / 100).toFixed(2) : '' %>" />
         <button type="button" class="link-btn gear-remove" title="Remove line">✕</button>
       </div>
     <% }) %>

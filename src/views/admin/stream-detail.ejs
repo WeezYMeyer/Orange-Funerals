@@ -101,7 +101,7 @@ const scheduled = fmtScheduled(stream.service_date);
       </dd>
       <% if (stream.gear && stream.gear.length) { %>
         <dt>Extra gear</dt>
-        <dd><% stream.gear.forEach(g => { %><div><%= g.qty ? g.qty + " × " : "" %><%= g.item %></div><% }) %></dd>
+        <dd><% stream.gear.forEach(g => { %><div><%= g.qty ? g.qty + " × " : "" %><%= g.item %><span class="sub"><%= g.price_cents ? " · R" + (g.price_cents / 100).toFixed(2) + " each" : " · included" %></span></div><% }) %></dd>
       <% } %>
       <% if (!stream.embed_code) { %>
         <dt>Embed code</dt><dd class="warn-inline" style="margin-top:0">Not added yet — viewers see "the livestream will appear here". <a href="/admin/streams/<%= stream.slug %>/edit">Add it</a></dd>

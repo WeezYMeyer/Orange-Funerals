@@ -76,7 +76,7 @@ router.get("/funerals", (req, res) => {
       venueAddress: s.venue_address || null,
       mapsLink: s.maps_link || null,
       kit: s.kit_name || null,
-      extraGear: parseGear(s.extra_gear),
+      extraGear: parseGear(s.extra_gear).map((g) => ({ item: g.item, qty: g.qty })), // no prices
       operators: s.operators ? s.operators.split(", ") : [],
       crewStatus: s.operators ? "confirmed" : s.asked ? "asked" : "none",
       notes: s.crew_notes || null,

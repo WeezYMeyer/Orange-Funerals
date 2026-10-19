@@ -6,7 +6,7 @@ const rands = (c) => (c / 100).toFixed(2);
 <%- include("../partials/admin-head", { title: label + " · " + stream.title }) %>
 <%- include("../partials/admin-nav") %>
 
-<div class="container narrow">
+<div class="container doc-form-wrap">
   <p class="help" style="margin-bottom:4px;"><a href="/admin/streams/<%= stream.slug %>#billing">← <%= stream.title %></a></p>
   <h1><%= doc.number ? "Edit " + label.toLowerCase() + " " + doc.number : "New " + label.toLowerCase() %></h1>
   <% if (!isQuote && !doc.id) { %>
@@ -84,16 +84,34 @@ const rands = (c) => (c / 100).toFixed(2);
           </div>
         </div>
 
-        <div class="grid-2">
-          <div>
-            <label for="extraLabel">Extra item (optional)</label>
-            <input type="text" id="extraLabel" name="extraLabel" placeholder="e.g. USB copy of recording" value="<%= doc.extra_label || '' %>" />
+        <label>Extra gear <span class="legend-note">from the funeral — change it on the funeral and it updates here</span></label>
+        <% if (doc.gear && doc.gear.length) { %>
+          <div class="gear-ro" id="gearRo" data-total="<%= (doc.gear.reduce((t, g) => t + Math.round((Number(g.qty) || 0) * (Number(g.unit_cents) || 0)), 0) / 100).toFixed(2) %>">
+            <% doc.gear.forEach(g => { const lt = Math.round((Number(g.qty) || 0) * (Number(g.unit_cents) || 0)); %>
+              <div class="gear-ro-row"><span><%= g.qty %> × <%= g.label %></span><span><%= lt ? fmtR(lt) : "Included" %></span></div>
+            <% }) %>
           </div>
-          <div>
-            <label for="extraAmount">Extra amount (R)</label>
-            <input type="text" inputmode="decimal" id="extraAmount" name="extraAmount" class="calc" value="<%= doc.extra_cents ? rands(doc.extra_cents) : '' %>" />
-          </div>
+        <% } else { %>
+          <p class="help" id="gearRo" data-total="0">No extra gear on this funeral.</p>
+        <% } %>
+        <p class="help"><% if (doc.kind === "invoice" && doc.paid_at) { %>This invoice is paid, so its gear is locked as it was.<% } else { %><a href="/admin/streams/<%= stream.slug %>/edit">Edit gear on the funeral →</a><% } %></p>
+
+        <label>Other items <span class="legend-note">anything that isn't gear, e.g. USB copy of the recording — price 0 shows as "Included"</span></label>
+        <div class="item-head"><span>Description</span><span>Qty</span><span>Price each (R)</span><span>Line total</span><span></span></div>
+        <div id="itemRows" class="item-rows">
+          <% const rows = (doc.items && doc.items.length) ? doc.items : [{ label: "", qty: 1, unit_cents: 0 }]; %>
+          <% rows.forEach(it => { %>
+            <div class="item-row">
+              <input type="text" name="itemLabel" placeholder="e.g. USB copy of the recording" value="<%= it.label || '' %>" />
+              <input type="text" inputmode="decimal" name="itemQty" class="qty" value="<%= it.qty || 1 %>" />
+              <input type="text" inputmode="decimal" name="itemPrice" value="<%= rands(it.unit_cents || 0) %>" />
+              <span class="item-total">—</span>
+              <button type="button" class="link-btn item-remove" title="Remove line">✕</button>
+            </div>
+          <% }) %>
         </div>
+        <button type="button" class="btn small secondary" id="addItem">+ Add line</button>
+
 
         <div class="total-box">
           <span>Total</span>
@@ -123,12 +141,35 @@ const rands = (c) => (c / 100).toFixed(2);
       const on = $("chargeTransport").checked;
       $("transportFields").style.display = on ? "" : "none";
       const transport = on ? Math.round(num($("transportKm").value) * num($("transportRate").value) * 100) / 100 : 0;
-      const extra = $("extraLabel").value.trim() ? num($("extraAmount").value) : 0;
-      $("totalOut").textContent = fmt(num($("packagePrice").value) + transport + extra);
+      let extras = 0;
+      document.querySelectorAll("#itemRows .item-row").forEach((row) => {
+        const label = row.querySelector('[name="itemLabel"]').value.trim();
+        const line = label ? (num(row.querySelector('[name="itemQty"]').value) || 1) * num(row.querySelector('[name="itemPrice"]').value) : 0;
+        row.querySelector(".item-total").textContent = label ? (line ? fmt(line) : "Included") : "—";
+        extras += line;
+      });
+      const gearTotal = num($("gearRo").getAttribute("data-total"));
+      $("totalOut").textContent = fmt(num($("packagePrice").value) + transport + gearTotal + extras);
       $("transportOut").textContent = on ? "Transport: " + num($("transportKm").value) + " km × " + fmt(num($("transportRate").value)) + " = " + fmt(transport) : "";
     }
-    document.querySelectorAll("#docForm input").forEach((el) => el.addEventListener("input", update));
-    $("chargeTransport").addEventListener("change", update);
+    const rowsEl = $("itemRows");
+    $("addItem").addEventListener("click", () => {
+      const row = rowsEl.querySelector(".item-row").cloneNode(true);
+      row.querySelector('[name="itemLabel"]').value = "";
+      row.querySelector('[name="itemQty"]').value = "1";
+      row.querySelector('[name="itemPrice"]').value = "0.00";
+      rowsEl.appendChild(row);
+      row.querySelector("input").focus();
+      update();
+    });
+    rowsEl.addEventListener("click", (e) => {
+      if (!e.target.classList.contains("item-remove")) return;
+      const row = e.target.closest(".item-row");
+      if (rowsEl.querySelectorAll(".item-row").length > 1) row.remove();
+      else row.querySelectorAll("input").forEach((i) => (i.value = i.name === "itemQty" ? "1" : i.name === "itemPrice" ? "0.00" : ""));
+      update();
+    });
+    document.getElementById("docForm").addEventListener("input", update);
     update();
   })();
 </script>

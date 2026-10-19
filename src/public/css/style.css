@@ -723,7 +723,8 @@ td.overdue { color: var(--danger); font-weight: 600; }
 
 /* Extra gear rows & pending video (Oct 2026) */
 .gear-rows { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
-.gear-row { display: grid; grid-template-columns: 1fr 80px 28px; gap: 8px; align-items: center; }
+.gear-head, .gear-row { display: grid; grid-template-columns: 1fr 70px 130px 28px; gap: 8px; align-items: center; }
+.gear-head { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--muted-soft); margin-bottom: 4px; }
 .gear-row .gear-remove { text-decoration: none; font-size: 15px; }
 .video-pending { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; background: #2b2b2b; color: #f1efea; padding: 20px; }
 .video-pending strong { display: block; font-family: var(--serif); font-weight: 500; font-size: 20px; margin-bottom: 6px; }
@@ -736,3 +737,24 @@ td.overdue { color: var(--danger); font-weight: 600; }
 .chat-mod-row:last-child { border-bottom: none; }
 .chat-mod-row form { margin: 0; }
 .chat-mod-body { margin-top: 2px; white-space: pre-wrap; word-break: break-word; }
+
+/* Quote/invoice extra lines (Oct 2026) */
+.item-head, .item-row { display: grid; grid-template-columns: 1fr 70px 120px 100px 28px; gap: 8px; align-items: center; }
+.item-head { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--muted-soft); margin-bottom: 4px; }
+.item-rows { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.item-total { font-size: 14px; text-align: right; color: var(--muted); }
+.item-row .item-remove { text-decoration: none; font-size: 15px; }
+@media (max-width: 640px) {
+  .item-head { display: none; }
+  .item-row { grid-template-columns: 1fr 60px 90px 28px; }
+  .item-row .item-total { display: none; }
+}
+.container.doc-form-wrap { max-width: 880px; }
+.form-section { min-width: 0; }
+.item-row input { min-width: 0; }
+
+/* Gear on quotes (read-only, from the funeral) */
+.gear-ro { border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); }
+.gear-ro-row { display: flex; justify-content: space-between; gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--line-soft); font-size: 14px; }
+.gear-ro-row:last-child { border-bottom: none; }
+@media (max-width: 640px) { .gear-head { display: none; } .gear-head, .gear-row { grid-template-columns: 1fr 50px 90px 28px; } }

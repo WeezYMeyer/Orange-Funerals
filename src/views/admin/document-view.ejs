@@ -154,14 +154,14 @@ const rate = (doc.transport_rate_cents / 100).toFixed(2);
             <td class="num"><%= fmtR(transport) %></td>
           </tr>
         <% } %>
-        <% if (doc.extra_label) { %>
+        <% (doc.gear || []).concat(doc.items || []).forEach(it => { const lt = lineCents(it); %>
           <tr>
-            <td><strong><%= doc.extra_label %></strong></td>
-            <td class="num">1</td>
-            <td class="num"><%= fmtR(doc.extra_cents) %></td>
-            <td class="num"><%= fmtR(doc.extra_cents) %></td>
+            <td><strong><%= it.label %></strong></td>
+            <td class="num"><%= it.qty %></td>
+            <td class="num"><%= it.unit_cents ? fmtR(it.unit_cents) : "—" %></td>
+            <td class="num"><%= lt ? fmtR(lt) : "Included" %></td>
           </tr>
-        <% } %>
+        <% }) %>
       </tbody>
     </table>
 
