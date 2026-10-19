@@ -13,6 +13,7 @@ const f = form || {
   kitId: stream.kit_id,
   leadSource: stream.lead_source,
   branch: stream.branch,
+  chatEnabled: stream.chat_enabled,
   gear: (() => { try { return JSON.parse(stream.extra_gear || "[]"); } catch (e) { return []; } })(),
 };
 %>

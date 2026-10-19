@@ -224,6 +224,37 @@ const scheduled = fmtScheduled(stream.service_date);
     </div>
   </div>
 
+  <div class="panel" id="chat">
+    <div class="panel-head">
+      <h2>Live chat</h2>
+      <form method="post" action="/admin/streams/<%= stream.slug %>/chat/toggle" style="margin:0">
+        <button class="btn small <%= stream.chat_enabled ? 'secondary' : '' %>" type="submit"><%= stream.chat_enabled ? "Turn chat off" : "Turn chat on" %></button>
+      </form>
+    </div>
+    <p class="help" style="margin-top:0;">
+      Chat is <strong><%= stream.chat_enabled ? "on" : "off" %></strong> for this page<%= stream.chat_enabled ? "" : " — viewers only see the video" %>. Changes apply instantly for anyone watching.
+    </p>
+    <% if (chatMessages.length === 0) { %>
+      <p class="help">No messages yet.</p>
+    <% } else { %>
+      <div class="chat-mod">
+        <% chatMessages.forEach(m => { %>
+          <div class="chat-mod-row">
+            <div>
+              <strong><%= m.name %></strong>
+              <span class="sub"><%= new Date(m.created_at.replace(" ", "T") + "Z").toLocaleString("en-ZA", { timeZone: "Africa/Johannesburg", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) %></span>
+              <div class="chat-mod-body"><%= m.body %></div>
+            </div>
+            <form method="post" action="/admin/streams/<%= stream.slug %>/chat/<%= m.id %>/delete" onsubmit="return confirm('Delete this message? It disappears for everyone watching.');">
+              <button class="link-btn" type="submit">Delete</button>
+            </form>
+          </div>
+        <% }) %>
+      </div>
+      <p class="help">Newest first. Refresh this page to see new messages.</p>
+    <% } %>
+  </div>
+
   <div class="panel">
     <h2 style="margin-top:0; font-size:18px;">Viewers who entered their email (<%= viewers.length %>)</h2>
     <% if (viewers.length === 0) { %>

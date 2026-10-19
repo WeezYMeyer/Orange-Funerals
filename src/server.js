@@ -16,6 +16,7 @@ const server = http.createServer(app);
 const io = new SocketIOServer(server);
 
 const PORT = process.env.PORT || 3000;
+app.set("io", io); // lets admin routes push chat deletions / on-off to viewers
 
 // --- View engine & static assets ---
 app.set("view engine", "ejs");
@@ -57,12 +58,13 @@ io.on("connection", (socket) => {
     if (!slug) return;
     socket.join(`stream:${slug}`);
 
-    const stream = db.prepare("SELECT id FROM streams WHERE slug = ?").get(slug);
+    const stream = db.prepare("SELECT id, chat_enabled FROM streams WHERE slug = ?").get(slug);
     if (!stream) return;
+    socket.emit("chat:state", { enabled: Boolean(stream.chat_enabled) });
 
     const history = db
       .prepare(
-        "SELECT name, body, created_at FROM chat_messages WHERE stream_id = ? ORDER BY id DESC LIMIT 50"
+        "SELECT id, name, body, created_at FROM chat_messages WHERE stream_id = ? ORDER BY id DESC LIMIT 50"
       )
       .all(stream.id)
       .reverse();
@@ -75,16 +77,17 @@ io.on("connection", (socket) => {
     const cleanBody = String(body || "").trim().slice(0, 500);
     if (!slug || !cleanBody) return;
 
-    const stream = db.prepare("SELECT id FROM streams WHERE slug = ?").get(slug);
-    if (!stream) return;
+    const stream = db.prepare("SELECT id, chat_enabled FROM streams WHERE slug = ?").get(slug);
+    if (!stream || !stream.chat_enabled) return; // chat switched off for this page
 
-    db.prepare("INSERT INTO chat_messages (stream_id, name, body) VALUES (?, ?, ?)").run(
+    const info = db.prepare("INSERT INTO chat_messages (stream_id, name, body) VALUES (?, ?, ?)").run(
       stream.id,
       cleanName,
       cleanBody
     );
 
     io.to(`stream:${slug}`).emit("chat:message", {
+      id: Number(info.lastInsertRowid),
       name: cleanName,
       body: cleanBody,
       created_at: new Date().toISOString(),

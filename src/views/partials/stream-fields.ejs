@@ -11,6 +11,13 @@
   <label for="embedCode">YoloLive embed code <span class="legend-note">optional — can be added later</span></label>
   <textarea id="embedCode" name="embedCode" class="short" placeholder="<iframe src=&quot;https://...&quot; ...></iframe>"><%= f.embedCode || '' %></textarea>
   <p class="help">Paste the full snippet YoloLive gives you, exactly as copied. Leave it empty to save the funeral now — viewers will see "the livestream will appear here" until you add it under <strong>Edit</strong>.</p>
+
+  <label class="pick check-row">
+    <input type="hidden" name="chatEnabled" value="0" />
+    <input type="checkbox" name="chatEnabled" value="1" <%= f.chatEnabled === 0 || f.chatEnabled === "0" ? "" : "checked" %> />
+    <span>Show live chat on this page</span>
+  </label>
+  <p class="help">Untick to hide the chat box for this funeral. You can also switch it on or off from the funeral page during the service.</p>
 </fieldset>
 
 <fieldset class="form-section">

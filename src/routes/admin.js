@@ -76,6 +76,7 @@ function readStreamForm(body) {
     kitId: body.kitId ? parseInt(body.kitId, 10) || null : null,
     leadSource: clean(body.leadSource),
     branch: body.branch === "capetown" ? "capetown" : "pretoria",
+    chatEnabled: [].concat(body.chatEnabled || []).includes("1") ? 1 : 0,
     gear: readGear(body),
   };
   const missing = [];
@@ -93,7 +94,7 @@ function streamFormValues(f) {
   return [f.title, f.embedCode, f.serviceDate || null, f.venueName || null, f.venueAddress || null,
     f.mapsLink || null, f.contactName || null, f.contactPhone || null, f.arrivalTime || null,
     f.crewNotes || null, f.kitId, f.leadSource || null,
-    f.gear.length ? JSON.stringify(f.gear) : null, f.branch];
+    f.gear.length ? JSON.stringify(f.gear) : null, f.branch, f.chatEnabled];
 }
 
 // Other funerals on the same day using the same kit.
@@ -204,8 +205,8 @@ router.post("/streams/new", (req, res) => {
   const slug = makeUniqueSlug(f.title);
   db.prepare(
     `INSERT INTO streams (title, embed_code, service_date, venue_name, venue_address, maps_link,
-       contact_name, contact_phone, arrival_time, crew_notes, kit_id, lead_source, extra_gear, branch, slug, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       contact_name, contact_phone, arrival_time, crew_notes, kit_id, lead_source, extra_gear, branch, chat_enabled, slug, created_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(...streamFormValues(f), slug, req.session.staffId);
 
   res.redirect(`/admin/streams/${slug}`);
@@ -290,6 +291,9 @@ router.get("/streams/:slug", (req, res) => {
     assignments,
     availableCrew,
     fmtDateLong: msg.fmtDateLong,
+    chatMessages: db
+      .prepare("SELECT id, name, body, created_at FROM chat_messages WHERE stream_id = ? ORDER BY id DESC LIMIT 300")
+      .all(stream.id),
     docs: Object.fromEntries(
       db.prepare("SELECT * FROM documents WHERE stream_id = ?").all(stream.id).map((d) => [d.kind, d])
     ),
@@ -360,9 +364,10 @@ router.post("/streams/:slug/edit", (req, res) => {
   db.prepare(
     `UPDATE streams SET title = ?, embed_code = ?, service_date = ?, venue_name = ?, venue_address = ?,
        maps_link = ?, contact_name = ?, contact_phone = ?, arrival_time = ?, crew_notes = ?, kit_id = ?,
-       lead_source = ?, extra_gear = ?, branch = ?
+       lead_source = ?, extra_gear = ?, branch = ?, chat_enabled = ?
      WHERE id = ?`
   ).run(...streamFormValues(f), stream.id);
+  broadcastChatState(req, stream.slug, f.chatEnabled);
 
   res.redirect(`/admin/streams/${stream.slug}?notice=updated`);
 });
@@ -378,12 +383,40 @@ router.post("/streams/:slug/delete", (req, res) => {
     db.prepare("DELETE FROM chat_messages WHERE stream_id = ?").run(streamId);
     db.prepare("DELETE FROM stream_views WHERE stream_id = ?").run(streamId);
     db.prepare("DELETE FROM stream_crew WHERE stream_id = ?").run(streamId);
+    db.prepare("DELETE FROM chat_messages WHERE stream_id = ?").run(streamId);
     db.prepare("DELETE FROM documents WHERE stream_id = ?").run(streamId);
     db.prepare("DELETE FROM streams WHERE id = ?").run(streamId);
   });
   deleteAll(stream.id);
 
   res.redirect("/admin?notice=deleted");
+});
+
+// --- Live chat moderation ---
+
+// Tell everyone watching this stream right now that chat was switched on/off.
+function broadcastChatState(req, slug, enabled) {
+  const io = req.app.get("io");
+  if (io) io.to(`stream:${slug}`).emit("chat:state", { enabled: Boolean(enabled) });
+}
+
+router.post("/streams/:slug/chat/toggle", (req, res) => {
+  const stream = db.prepare("SELECT * FROM streams WHERE slug = ?").get(req.params.slug);
+  if (!stream) return res.status(404).send("Stream not found");
+  const next = stream.chat_enabled ? 0 : 1;
+  db.prepare("UPDATE streams SET chat_enabled = ? WHERE id = ?").run(next, stream.id);
+  broadcastChatState(req, stream.slug, next);
+  res.redirect(`/admin/streams/${stream.slug}#chat`);
+});
+
+router.post("/streams/:slug/chat/:id/delete", (req, res) => {
+  const stream = db.prepare("SELECT * FROM streams WHERE slug = ?").get(req.params.slug);
+  if (!stream) return res.status(404).send("Stream not found");
+  const id = parseInt(req.params.id, 10);
+  db.prepare("DELETE FROM chat_messages WHERE id = ? AND stream_id = ?").run(id, stream.id);
+  const io = req.app.get("io");
+  if (io) io.to(`stream:${stream.slug}`).emit("chat:deleted", { id });
+  res.redirect(`/admin/streams/${stream.slug}#chat`);
 });
 
 // --- Operators on a funeral ---

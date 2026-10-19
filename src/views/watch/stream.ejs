@@ -48,7 +48,7 @@
       </form>
     </div>
   <% } else { %>
-    <div class="stream-layout">
+    <div class="stream-layout <%= stream.chat_enabled ? '' : 'no-chat' %>" id="stream-layout">
       <div class="video-wrap">
         <% if (stream.embed_code && stream.embed_code.trim()) { %>
           <%- stream.embed_code %>
@@ -80,8 +80,8 @@
 <% if (unlocked) { %>
   <script src="/socket.io/socket.io.js"></script>
   <script>
-    window.__STREAM_SLUG__ = <%- JSON.stringify(stream.slug) %>;
-    window.__VIEWER_NAME__ = <%- JSON.stringify(viewerName || "Guest") %>;
+    window.__STREAM_SLUG__ = <%- JSON.stringify(stream.slug).replace(/</g, "\\u003c") %>;
+    window.__VIEWER_NAME__ = <%- JSON.stringify(viewerName || "Guest").replace(/</g, "\\u003c") %>;
   </script>
   <script src="/js/chat.js"></script>
 <% } %>
