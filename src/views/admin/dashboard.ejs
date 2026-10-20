@@ -82,6 +82,8 @@ const noticeText = notice === "deleted" ? "Stream deleted." : null;
                   <span class="tag email-sent">Sent</span>
                 <% } else if (s.status === "partial") { %>
                   <span class="tag email-partial">Partial</span>
+                <% } else if (s.status === "pending") { %>
+                  <span class="tag email-partial">To send</span>
                 <% } else { %>
                   <span class="tag email-failed">Not sent</span>
                 <% } %>

@@ -50,8 +50,9 @@
   <% } else { %>
     <div class="stream-layout <%= stream.chat_enabled ? '' : 'no-chat' %>" id="stream-layout">
       <div class="video-wrap">
-        <% if (stream.embed_code && stream.embed_code.trim()) { %>
-          <%- stream.embed_code %>
+        <% const playEmbed = (stream.ended_at && stream.recording_embed && stream.recording_embed.trim()) ? stream.recording_embed : stream.embed_code; %>
+        <% if (playEmbed && playEmbed.trim()) { %>
+          <%- playEmbed %>
         <% } else { %>
           <div class="video-pending">
             <div>

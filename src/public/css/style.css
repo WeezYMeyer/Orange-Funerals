@@ -758,3 +758,10 @@ td.overdue { color: var(--danger); font-weight: 600; }
 .gear-ro-row { display: flex; justify-content: space-between; gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--line-soft); font-size: 14px; }
 .gear-ro-row:last-child { border-bottom: none; }
 @media (max-width: 640px) { .gear-head { display: none; } .gear-head, .gear-row { grid-template-columns: 1fr 50px 90px 28px; } }
+
+/* After-the-service steps */
+.step { display: flex; gap: 14px; padding: 14px 0; border-top: 1px solid var(--line-soft); }
+.step:first-of-type { border-top: none; padding-top: 4px; }
+.step-num { flex: 0 0 28px; height: 28px; border-radius: 50%; background: var(--accent-soft); color: var(--accent-dark); font-weight: 700; display: grid; place-items: center; font-size: 14px; }
+.step.done .step-num { background: #e6f4ea; color: #1e6b3a; }
+.step-body { flex: 1; min-width: 0; }

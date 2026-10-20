@@ -14,10 +14,12 @@ const router = express.Router();
 //   'no-viewers' — ended, but nobody watched, so there's nothing to send
 //   'sent'       — ended, everyone who watched got their email (green)
 //   'partial'    — ended, some sent, some failed (amber)
-//   'failed'     — ended, nothing sent yet / everything failed (red)
+//   'pending'    — ended, emails not sent yet (waiting for the recording)
+//   'failed'     — ended, sending was tried and everything failed (red)
 function emailStatus(stream) {
   if (!stream.ended_at) return "not-ended";
   if (stream.viewer_count === 0) return "no-viewers";
+  if (!stream.emails_sent && !stream.emails_failed) return "pending";
   if (stream.emails_sent > 0 && stream.emails_failed === 0) return "sent";
   if (stream.emails_sent > 0 && stream.emails_failed > 0) return "partial";
   return "failed";
@@ -314,25 +316,42 @@ router.get("/streams/:slug", (req, res) => {
   });
 });
 
-router.post("/streams/:slug/end", async (req, res) => {
+// Step 1 after the service: end the stream. Thank-you emails are sent
+// separately, once YoloLive's recording embed code has been added.
+router.post("/streams/:slug/end", (req, res) => {
   const stream = db.prepare("SELECT * FROM streams WHERE slug = ?").get(req.params.slug);
   if (!stream) return res.status(404).send("Stream not found");
-
   if (!stream.ended_at) {
     db.prepare("UPDATE streams SET ended_at = datetime('now') WHERE id = ?").run(stream.id);
   }
+  res.redirect(`/admin/streams/${stream.slug}?notice=ended#after`);
+});
 
-  let notice = "ended";
+// Step 2: the recording. YoloLive gives a different embed code for the replay;
+// once saved, the same watch link plays the recording instead of the live feed.
+router.post("/streams/:slug/recording", (req, res) => {
+  const stream = db.prepare("SELECT * FROM streams WHERE slug = ?").get(req.params.slug);
+  if (!stream) return res.status(404).send("Stream not found");
+  const code = String(req.body.recordingEmbed || "").trim();
+  db.prepare("UPDATE streams SET recording_embed = ? WHERE id = ?").run(code || null, stream.id);
+  res.redirect(`/admin/streams/${stream.slug}?notice=${code ? "recording-saved" : "recording-removed"}#after`);
+});
+
+// Step 3: send the thank-you emails (same as retry: never emails anyone twice).
+router.post("/streams/:slug/send-thanks", async (req, res) => {
+  const stream = db.prepare("SELECT * FROM streams WHERE slug = ?").get(req.params.slug);
+  if (!stream) return res.status(404).send("Stream not found");
+  if (!stream.ended_at) {
+    db.prepare("UPDATE streams SET ended_at = datetime('now') WHERE id = ?").run(stream.id);
+  }
+  let notice;
   try {
     const result = await sendThankYouEmails(stream.id);
-    notice = result.alreadySent
-      ? "already-sent"
-      : `thanks-sent-${result.sent}-${result.failed}-${result.skipped}`;
+    notice = result.alreadySent ? "already-sent" : `thanks-sent-${result.sent}-${result.failed}-${result.skipped}`;
   } catch (err) {
     notice = `email-error-${encodeURIComponent(err.message)}`;
   }
-
-  res.redirect(`/admin/streams/${stream.slug}?notice=${notice}`);
+  res.redirect(`/admin/streams/${stream.slug}?notice=${notice}#after`);
 });
 
 // Retries the thank-you send — only to contacts who don't already have a

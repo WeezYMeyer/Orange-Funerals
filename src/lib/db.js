@@ -170,6 +170,7 @@ db.exec(`
   if (!existing.has("lead_source")) db.exec("ALTER TABLE streams ADD COLUMN lead_source TEXT");
   if (!existing.has("extra_gear")) db.exec("ALTER TABLE streams ADD COLUMN extra_gear TEXT");  // JSON [{item, qty}]
   if (!existing.has("branch")) db.exec("ALTER TABLE streams ADD COLUMN branch TEXT NOT NULL DEFAULT 'pretoria'");
+  if (!existing.has("recording_embed")) db.exec("ALTER TABLE streams ADD COLUMN recording_embed TEXT"); // YoloLive replay, after the service
   if (!existing.has("chat_enabled")) db.exec("ALTER TABLE streams ADD COLUMN chat_enabled INTEGER NOT NULL DEFAULT 1");
   const docCols = new Set(db.prepare("PRAGMA table_info(documents)").all().map((c) => c.name));
   if (!docCols.has("gear_items")) db.exec("ALTER TABLE documents ADD COLUMN gear_items TEXT"); // funeral gear lines, synced

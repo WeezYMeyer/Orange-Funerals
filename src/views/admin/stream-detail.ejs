@@ -9,6 +9,12 @@ if (notice === "already-sent") {
   noticeHtml = "Sending thank-you emails failed: " + decodeURIComponent(notice.replace("email-error-", "")) + " — check the email settings in Render.";
 } else if (notice === "updated") {
   noticeHtml = "Stream details updated. The public link is unchanged.";
+} else if (notice === "ended") {
+  noticeHtml = "Stream ended. Next: paste the recording embed code below, then send the thank-you emails.";
+} else if (notice === "recording-saved") {
+  noticeHtml = "Recording saved — the watch link now plays the recording.";
+} else if (notice === "recording-removed") {
+  noticeHtml = "Recording removed — the watch link shows the original live embed again.";
 }
 
 function fmtScheduled(dateStr) {
@@ -50,32 +56,66 @@ const scheduled = fmtScheduled(stream.service_date);
       <p><span class="tag ended">Ended <%= new Date(stream.ended_at + "Z").toLocaleString() %></span></p>
     <% } else { %>
       <p><span class="tag live">Live / Open</span></p>
-      <form method="post" action="/admin/streams/<%= stream.slug %>/end" onsubmit="return confirm('End this stream and send thank-you emails to everyone who watched?');">
-        <button class="btn danger" type="submit">End Stream &amp; Send Thank-You Emails</button>
+      <form method="post" action="/admin/streams/<%= stream.slug %>/end" onsubmit="return confirm('End this stream? No emails are sent yet — you add the recording and send the thank-you emails next.');">
+        <button class="btn danger" type="submit">End Stream</button>
       </form>
-    <% } %>
-
-    <% if (stream.ended_at) { %>
-      <label>Thank-you emails</label>
-      <p>
-        <% if (status === "sent") { %>
-          <span class="tag email-sent">Sent to everyone who watched</span>
-        <% } else if (status === "no-viewers") { %>
-          <span class="tag">No viewers to email</span>
-        <% } else if (status === "partial") { %>
-          <span class="tag email-partial">Partially sent</span>
-        <% } else { %>
-          <span class="tag email-failed">Not sent</span>
-        <% } %>
-      </p>
-      <% if (status === "partial" || status === "failed") { %>
-        <form method="post" action="/admin/streams/<%= stream.slug %>/resend-thanks">
-          <button class="btn secondary" type="submit">Retry Sending</button>
-        </form>
-        <p class="help">Only retries people who haven't successfully received it yet — safe to click again.</p>
-      <% } %>
+      <p class="help">After the service: end the stream, add YoloLive's recording embed code, then send the thank-you emails.</p>
     <% } %>
   </div>
+
+  <% if (stream.ended_at) { const hasRec = stream.recording_embed && stream.recording_embed.trim(); %>
+  <div class="panel" id="after">
+    <h2 class="panel-title">After the service</h2>
+
+    <div class="step <%= hasRec ? 'done' : '' %>">
+      <div class="step-num"><%= hasRec ? "✓" : "1" %></div>
+      <div class="step-body">
+        <strong>Recording embed code</strong>
+        <p class="help" style="margin-top:2px;">Paste the embed code YoloLive gives for the <em>recording</em>. The watch link stays the same — it just plays the recording from then on.</p>
+        <form method="post" action="/admin/streams/<%= stream.slug %>/recording">
+          <textarea name="recordingEmbed" class="short" placeholder="<iframe src=&quot;https://...&quot; ...></iframe>"><%= stream.recording_embed || "" %></textarea>
+          <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
+            <button class="btn small" type="submit"><%= hasRec ? "Update recording" : "Save recording" %></button>
+            <a class="btn small secondary" href="<%= publicUrl %>" target="_blank">Check the watch page</a>
+          </div>
+        </form>
+        <p class="help"><%= hasRec ? "Watch page is showing the recording." : "Until you add it, the watch page keeps the live embed code." %></p>
+      </div>
+    </div>
+
+    <div class="step <%= status === 'sent' ? 'done' : '' %>">
+      <div class="step-num"><%= status === "sent" ? "✓" : "2" %></div>
+      <div class="step-body">
+        <strong>Thank-you emails</strong>
+        <p style="margin:6px 0;">
+          <% if (status === "sent") { %>
+            <span class="tag email-sent">Sent to everyone who watched</span>
+          <% } else if (status === "no-viewers") { %>
+            <span class="tag">No viewers to email</span>
+          <% } else if (status === "partial") { %>
+            <span class="tag email-partial">Partially sent</span>
+          <% } else if (status === "failed") { %>
+            <span class="tag email-failed">Sending failed</span>
+          <% } else { %>
+            <span class="tag">Not sent yet</span>
+          <% } %>
+        </p>
+        <% if (status === "pending") { %>
+          <form method="post" action="/admin/streams/<%= stream.slug %>/send-thanks"
+                onsubmit="return confirm('<%= hasRec ? "Send the thank-you email to everyone who watched?" : "You have NOT added the recording yet — the link in the email will show the live embed. Send anyway?" %>');">
+            <button class="btn <%= hasRec ? '' : 'secondary' %>" type="submit">Send thank-you emails (<%= viewers.length %>)</button>
+          </form>
+          <% if (!hasRec) { %><p class="help warn-inline">Add the recording first so the link in the email plays it.</p><% } %>
+        <% } else if (status === "partial" || status === "failed") { %>
+          <form method="post" action="/admin/streams/<%= stream.slug %>/resend-thanks">
+            <button class="btn secondary" type="submit">Retry Sending</button>
+          </form>
+          <p class="help">Only retries people who haven't received it yet — safe to click again.</p>
+        <% } %>
+      </div>
+    </div>
+  </div>
+  <% } %>
 
   <div class="panel">
     <div class="panel-head">
