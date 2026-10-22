@@ -293,10 +293,29 @@ router.get(`/streams/:slug/${KIND}`, (req, res) => {
     number: all[p + "account_number"], branchCode: all[p + "branch_code"], type: all[p + "account_type"],
     swift: all[p + "swift"], label: stream.branch === "capetown" ? "Cape Town" : "Pretoria",
   };
+  // Letterhead: Cape Town funerals carry the Cape Town office details;
+  // Pretoria keeps the main details with the preparer's email.
+  const ct = stream.branch === "capetown";
+  const from = ct
+    ? {
+        name: all.ct_business_name || all.business_name,
+        address: all.ct_business_address,
+        phone: all.ct_business_phone,
+        email: all.ct_business_email,
+        website: all.ct_business_website || all.business_website,
+      }
+    : {
+        name: all.business_name,
+        address: all.business_address,
+        phone: all.business_phone,
+        email: (preparer && preparer.email && preparer.email.replace(/\.removed\.\d+$/, "")) || all.business_email,
+        website: all.business_website,
+      };
   res.render("admin/document-view", {
     stream,
     doc,
     bank,
+    from,
     preparer: preparer ? { name: preparer.name, email: preparer.email.replace(/\.removed\.\d+$/, "") } : null,
     s: getSettings(),
     serviceDateText: stream.service_date ? fmtDateLong(stream.service_date) : null,
@@ -398,6 +417,7 @@ router.get("/finance", (req, res) => {
 
 const SETTING_FIELDS = [
   "business_name", "business_address", "business_phone", "business_email", "business_website",
+  "ct_business_name", "ct_business_address", "ct_business_phone", "ct_business_email", "ct_business_website",
   "bank_name", "bank_branch_name", "bank_account_holder", "bank_account_number", "bank_branch_code", "bank_account_type", "bank_swift",
   "ct_bank_name", "ct_bank_branch_name", "ct_bank_account_holder", "ct_bank_account_number", "ct_bank_branch_code",
   "ct_bank_account_type", "ct_bank_swift", "crew_guidelines_message",

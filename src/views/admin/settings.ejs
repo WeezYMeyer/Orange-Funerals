@@ -1,12 +1,19 @@
 <%
 const field = (key, label, opts = {}) => ({ key, label, ...opts });
 const groups = [
-  ["Business details (shown on quotes & invoices)", [
+  ["Pretoria branch – letterhead on quotes & invoices", [
     field("business_name", "Business name"),
     field("business_address", "Address"),
     field("business_phone", "Phone"),
     field("business_email", "Email"),
     field("business_website", "Website"),
+  ]],
+  ["Cape Town branch – letterhead on quotes & invoices", [
+    field("ct_business_name", "Business name"),
+    field("ct_business_address", "Address"),
+    field("ct_business_phone", "Phone"),
+    field("ct_business_email", "Email"),
+    field("ct_business_website", "Website"),
   ]],
   ["Pretoria branch – banking details (used when a funeral's branch is Pretoria)", [
     field("bank_account_holder", "Account holder"),

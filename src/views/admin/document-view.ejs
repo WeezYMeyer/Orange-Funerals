@@ -113,11 +113,11 @@ const rate = (doc.transport_rate_cents / 100).toFixed(2);
     <div class="parties">
       <div>
         <h3>From</h3>
-        <strong><%= s.business_name %></strong><br/>
-        <% if (s.business_address) { %><%= s.business_address %><br/><% } %>
-        <% if (s.business_phone) { %><%= s.business_phone %><br/><% } %>
-        <% if (preparer && preparer.email) { %><%= preparer.email %><br/><% } else if (s.business_email) { %><%= s.business_email %><br/><% } %>
-        <% if (s.business_website) { %><%= s.business_website %><% } %>
+        <strong><%= from.name %></strong><br/>
+        <% if (from.address) { %><%= from.address %><br/><% } %>
+        <% if (from.phone) { %><%= from.phone %><br/><% } %>
+        <% if (from.email) { %><%= from.email %><br/><% } %>
+        <% if (from.website) { %><%= from.website %><% } %>
       </div>
       <div>
         <h3><%= isQuote ? "Prepared for" : "Bill to" %></h3>
@@ -200,7 +200,7 @@ const rate = (doc.transport_rate_cents / 100).toFixed(2);
 
     <footer>
       <span>Thank you for trusting us with this service.</span>
-      <span><%= s.business_name %></span>
+      <span><%= from.name %></span>
     </footer>
   </div>
 </body>

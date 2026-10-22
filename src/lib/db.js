@@ -195,7 +195,13 @@ db.exec(`
     bank_branch_code: "012645",
     bank_account_type: "Current",
     bank_swift: "SBZAZAJJ",
-    // Cape Town branch
+    // Cape Town branch — letterhead on its quotes & invoices
+    ct_business_name: "Orange Productions (Pty) Ltd",
+    ct_business_address: "8 Windell St, Durbanville, Cape Town, 7550",
+    ct_business_phone: "+27 72 045 6418",
+    ct_business_email: "tinus@orangeproductions.co.za",
+    ct_business_website: "www.orangeproductions.co.za",
+    // Cape Town branch — bank
     ct_bank_name: "Capitec",
     ct_bank_branch_name: "",
     ct_bank_account_holder: "Orange Broadcast",
