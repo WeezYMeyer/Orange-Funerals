@@ -197,7 +197,7 @@ db.exec(`
     bank_swift: "SBZAZAJJ",
     // Cape Town branch — letterhead on its quotes & invoices
     ct_business_name: "Orange Productions (Pty) Ltd",
-    ct_business_address: "8 Windell St, Durbanville, Cape Town, 7550",
+    ct_business_address: "19 Koraalboom, Vredekloof, Kaapstad",
     ct_business_phone: "+27 72 045 6418",
     ct_business_email: "tinus@orangeproductions.co.za",
     ct_business_website: "www.orangeproductions.co.za",
@@ -239,6 +239,12 @@ db.exec(`
     }
     set.run("settings_version", "2");
   }
+
+  // Oct 2026: Cape Town office moved. Only replaces the old default address,
+  // so an address typed in on the Settings page is never overwritten.
+  db.prepare(
+    "UPDATE settings SET value = ? WHERE key = 'ct_business_address' AND value = ?"
+  ).run(defaults.ct_business_address, "8 Windell St, Durbanville, Cape Town, 7550");
 }
 
 // The three funeral kits. Safe to run every boot.
