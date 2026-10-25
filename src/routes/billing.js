@@ -8,6 +8,7 @@
 const express = require("express");
 const db = require("../lib/db");
 const { parseServiceDate, fmtDateLong } = require("../lib/crewMessages");
+const crm = require("../lib/crmSync");
 
 const router = express.Router();
 
@@ -86,6 +87,13 @@ function docGear(doc) {
 function withoutGear(items, gear) {
   const names = new Set(gear.map((g) => String(g.label).trim().toLowerCase()));
   return items.filter((it) => !names.has(String(it.label).trim().toLowerCase()));
+}
+// Everyone billed on this funeral's quote or invoice.
+function billedEmails(streamId) {
+  return db
+    .prepare("SELECT bill_to_email AS e FROM documents WHERE stream_id = ? AND bill_to_email IS NOT NULL AND bill_to_email != ''")
+    .all(streamId)
+    .map((r) => r.e);
 }
 function isFrozen(doc) {
   return doc.kind === "invoice" && Boolean(doc.paid_at); // paid invoices never change
@@ -273,6 +281,8 @@ router.post(`/streams/:slug/${KIND}/edit`, (req, res) => {
        VALUES (@stream_id, @kind, @number, @prepared_by, ${cols.map((c) => "@" + c).join(", ")})`
     ).run({ ...row, stream_id: stream.id, kind, number: nextNumber(kind), prepared_by: req.session.staffId });
   }
+  // The billed person goes to the Orange Platform CRM (and the old one, if the email changed).
+  crm.enqueue(doc.bill_to_email, existing && existing.bill_to_email);
   res.redirect(`/admin/streams/${stream.slug}/${kind}`);
 });
 
@@ -333,13 +343,16 @@ router.post("/streams/:slug/invoice/:state(paid|unpaid)", (req, res) => {
     stream.id
   );
   if (req.params.state === "unpaid") syncDocsForStream(stream.id);
+  crm.enqueue(billedEmails(stream.id)); // paid / unpaid shows on their CRM record
   res.redirect(req.get("Referer") || `/admin/streams/${stream.slug}`);
 });
 
 router.post(`/streams/:slug/${KIND}/delete`, (req, res) => {
   const stream = loadStream(req, res);
   if (!stream) return;
+  const emails = billedEmails(stream.id);
   db.prepare("DELETE FROM documents WHERE stream_id = ? AND kind = ?").run(stream.id, req.params.kind);
+  crm.enqueue(emails);
   res.redirect(`/admin/streams/${stream.slug}#billing`);
 });
 
@@ -426,7 +439,13 @@ const SETTING_FIELDS = [
 ];
 
 router.get("/settings", (req, res) => {
-  res.render("admin/settings", { s: getSettings(), notice: req.query.notice || null });
+  res.render("admin/settings", { s: getSettings(), notice: req.query.notice || null, crm: crm.status() });
+});
+
+// Send every contact to the Orange Platform CRM again (e.g. after fixing the settings).
+router.post("/crm/resync", (req, res) => {
+  crm.enqueueAll();
+  res.redirect("/admin/settings?notice=crm-resync#crm");
 });
 
 router.post("/settings", (req, res) => {
@@ -443,3 +462,4 @@ router.post("/settings", (req, res) => {
 
 module.exports = router;
 module.exports.syncDocsForStream = syncDocsForStream;
+module.exports.billedEmails = billedEmails;

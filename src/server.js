@@ -97,4 +97,5 @@ io.on("connection", (socket) => {
 
 server.listen(PORT, () => {
   console.log(`Funeral streams platform running at http://localhost:${PORT}`);
+  require("./lib/crmSync").start(); // contacts → Orange Platform CRM, if switched on
 });

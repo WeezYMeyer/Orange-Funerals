@@ -238,3 +238,25 @@ src/
   views/                  # EJS templates
   public/                  # CSS + chat client-side JS
 ```
+
+---
+
+## 7. Sending contacts to the Orange Platform CRM
+
+Everyone who enters their email on a watch page, everyone billed on a funeral quote or
+invoice, and every unsubscribe is sent to the **Contacts** page in Orange Platform
+automatically, usually within a couple of seconds. The watch page never waits for it: each
+email goes into a small `crm_outbox` table first and is sent in the background, retried
+every 5 minutes if the platform can't be reached.
+
+Switch it on in Render → this service → **Environment**:
+
+| Variable | Value |
+|---|---|
+| `CRM_SUPABASE_URL` | Orange Platform's Supabase Project URL (the `url` in the platform's `config.js`) |
+| `CRM_SUPABASE_KEY` | Orange Platform's publishable / anon key (the `key` in `config.js`) |
+| `CRM_INGEST_SECRET` | The value Supabase returned when you created the `funerals` row in `crm_secrets` (see the platform README) |
+
+The first time it starts with these set, it sends everyone already in the database once.
+**Settings** shows whether the sync is on, how many are waiting, and the last problem, and
+has a **Send everyone again** button for after a fix. The code is in `src/lib/crmSync.js`.

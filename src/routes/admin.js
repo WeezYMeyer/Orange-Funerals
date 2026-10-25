@@ -5,6 +5,7 @@ const { requireStaff } = require("../lib/auth");
 const { makeUniqueSlug } = require("../lib/slug");
 const { sendThankYouEmails, sendBroadcast } = require("../lib/emailService");
 const msg = require("../lib/crewMessages");
+const crm = require("../lib/crmSync");
 
 const router = express.Router();
 
@@ -411,6 +412,12 @@ router.post("/streams/:slug/delete", (req, res) => {
   const stream = db.prepare("SELECT * FROM streams WHERE slug = ?").get(req.params.slug);
   if (!stream) return res.status(404).send("Stream not found");
 
+  // Who this funeral touched, so their CRM records drop it once it's gone.
+  const touched = [
+    ...db.prepare("SELECT c.email FROM stream_views sv JOIN contacts c ON c.id = sv.contact_id WHERE sv.stream_id = ?").all(stream.id).map((r) => r.email),
+    ...billing.billedEmails(stream.id),
+  ];
+
   const deleteAll = db.transaction((streamId) => {
     db.prepare("DELETE FROM email_logs WHERE stream_id = ?").run(streamId);
     db.prepare("DELETE FROM chat_messages WHERE stream_id = ?").run(streamId);
@@ -421,6 +428,7 @@ router.post("/streams/:slug/delete", (req, res) => {
     db.prepare("DELETE FROM streams WHERE id = ?").run(streamId);
   });
   deleteAll(stream.id);
+  crm.enqueue(touched);
 
   res.redirect("/admin?notice=deleted");
 });

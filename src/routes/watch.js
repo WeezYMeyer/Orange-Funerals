@@ -1,6 +1,7 @@
 const express = require("express");
 const { nanoid } = require("nanoid");
 const db = require("../lib/db");
+const crm = require("../lib/crmSync");
 
 const router = express.Router();
 
@@ -55,6 +56,9 @@ router.post("/:slug", (req, res) => {
   db.prepare(
     "INSERT OR IGNORE INTO stream_views (stream_id, contact_id) VALUES (?, ?)"
   ).run(stream.id, contact.id);
+
+  // On to the Orange Platform CRM, in the background — the viewer never waits for it.
+  crm.enqueue(email);
 
   req.session.unlockedStreams = req.session.unlockedStreams || {};
   req.session.unlockedStreams[stream.id] = true;

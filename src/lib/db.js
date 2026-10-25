@@ -247,6 +247,17 @@ db.exec(`
   ).run(defaults.ct_business_address, "8 Windell St, Durbanville, Cape Town, 7550");
 }
 
+// --- Contacts waiting to be sent to the Orange Platform CRM (added Oct 2026) ---
+// One row per email with a change the platform hasn't received yet. See lib/crmSync.js.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS crm_outbox (
+    email      TEXT PRIMARY KEY,
+    queued_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    attempts   INTEGER NOT NULL DEFAULT 0,
+    last_error TEXT
+  );
+`);
+
 // The three funeral kits. Safe to run every boot.
 for (const name of ["Kit 1", "Kit 2", "Kit 3"]) {
   db.prepare("INSERT OR IGNORE INTO kits (name) VALUES (?)").run(name);

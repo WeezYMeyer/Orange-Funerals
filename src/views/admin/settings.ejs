@@ -77,6 +77,28 @@ const groups = [
       <button class="btn" type="submit">Save settings</button>
     </form>
   </div>
+
+  <% if (typeof crm !== "undefined" && crm) { %>
+  <div class="panel" id="crm">
+    <h2 class="panel-title">Orange Platform CRM</h2>
+    <% if (notice === "crm-resync") { %><div class="notice-box">Every contact is queued and on its way to the CRM.</div><% } %>
+    <% if (!crm.enabled) { %>
+      <p class="help">Off. Viewers and billed clients are not being sent to the Orange Platform. To switch it on, add <strong>CRM_SUPABASE_URL</strong>, <strong>CRM_SUPABASE_KEY</strong> and <strong>CRM_INGEST_SECRET</strong> under Environment in Render.</p>
+    <% } else { %>
+      <p class="help">
+        On. Everyone who enters their email on a watch page, everyone billed on a quote or invoice, and every unsubscribe goes to the Contacts page in Orange Platform.
+      </p>
+      <p class="help">
+        Waiting to send: <strong><%= crm.waiting %></strong><% if (crm.failing) { %> (<%= crm.failing %> retrying)<% } %>
+        <% if (crm.lastSyncAt) { %> · last sent <%= new Date(crm.lastSyncAt).toLocaleString("en-ZA", { timeZone: "Africa/Johannesburg" }) %><% } %>
+      </p>
+      <% if (crm.lastError) { %><div class="error-box">Last problem: <%= crm.lastError %></div><% } %>
+      <form method="post" action="/admin/crm/resync" style="margin-top:10px">
+        <button class="btn small secondary" type="submit">Send everyone again</button>
+      </form>
+    <% } %>
+  </div>
+  <% } %>
 </div>
 </body>
 </html>
