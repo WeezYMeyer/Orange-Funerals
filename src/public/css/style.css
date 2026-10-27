@@ -765,3 +765,9 @@ td.overdue { color: var(--danger); font-weight: 600; }
 .step-num { flex: 0 0 28px; height: 28px; border-radius: 50%; background: var(--accent-soft); color: var(--accent-dark); font-weight: 700; display: grid; place-items: center; font-size: 14px; }
 .step.done .step-num { background: #e6f4ea; color: #1e6b3a; }
 .step-body { flex: 1; min-width: 0; }
+/* Chat scroll fix (27 Oct 2026): the chat box must never grow the page. */
+.chat-wrap { contain: size; min-height: 480px; }
+.chat-messages { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+@media (max-width: 640px) {
+  .chat-wrap { contain: size; height: 360px; min-height: 0; }
+}
