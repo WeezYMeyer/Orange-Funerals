@@ -105,6 +105,8 @@ const rate = (doc.transport_rate_cents / 100).toFixed(2);
           <tr><td><%= label %> no.</td><td><strong><%= doc.number %></strong></td></tr>
           <tr><td>Date</td><td><%= fmtYmd(doc.issue_date) %></td></tr>
           <% if (doc.due_date) { %><tr><td><%= isQuote ? "Valid until" : "Due" %></td><td><%= fmtYmd(doc.due_date) %></td></tr><% } %>
+          <% if (supplier) { %><tr><td>Supplier no.</td><td><strong><%= supplier %></strong></td></tr><% } %>
+          <% if (stream.account_client && funeralRef(stream)) { %><tr><td>Your ref</td><td><strong><%= funeralRef(stream) %></strong></td></tr><% } %>
           <% if (preparer) { %><tr><td>Prepared by</td><td><%= preparer.name %></td></tr><% } %>
         </table>
       </div>
@@ -130,7 +132,7 @@ const rate = (doc.transport_rate_cents / 100).toFixed(2);
 
     <div class="service">
       <h3>Service</h3>
-      Funeral livestream – <strong><%= stream.title %></strong><br/>
+      Funeral livestream – <strong><%= stream.account_client && stream.late_name ? "Late " + stream.late_name : stream.title %></strong><% if (stream.account_client && stream.bb_number) { %> · <%= (/^bb/i.test(stream.bb_number) ? stream.bb_number : "BB " + stream.bb_number) %><% } %><br/>
       <%= serviceDateText || "Date to be confirmed" %><% if (stream.venue_name) { %> · <%= stream.venue_name %><% } %>
     </div>
 

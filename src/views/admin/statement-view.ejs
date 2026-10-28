@@ -103,6 +103,7 @@
           <tr><td>Statement no.</td><td><strong><%= st.number %></strong></td></tr>
           <tr><td>Date</td><td><%= fmtYmd(st.issue_date) %></td></tr>
           <tr><td>Period</td><td><%= fmtYmd(st.period_from) %> – <%= fmtYmd(st.period_to) %></td></tr>
+          <% if (supplier) { %><tr><td>Supplier no.</td><td><strong><%= supplier %></strong></td></tr><% } %>
           <% if (preparer) { %><tr><td>Prepared by</td><td><%= preparer.name %></td></tr><% } %>
         </table>
       </div>
@@ -126,12 +127,17 @@
     </div>
 
     <table class="items">
-      <thead><tr><th>Service date</th><th>Funeral livestream</th><th>Invoice</th><th class="num">Amount</th></tr></thead>
+      <thead><tr><th>Service date</th><th>Funeral livestream</th><th>BB number</th><th>Invoice</th><th class="num">Amount</th></tr></thead>
       <tbody>
         <% items.forEach(it => { %>
           <tr>
             <td style="white-space:nowrap"><%= dateOf(it.service_date) %></td>
-            <td><strong><%= it.title %></strong><% if (it.venue_name) { %><br/><span class="period"><%= it.venue_name %></span><% } %></td>
+            <td>
+              <strong><%= it.late_name ? "Late " + it.late_name : it.title %></strong>
+              <% if (showBranch && it.account_client) { %><br/><span class="period"><%= it.account_client %></span><% } %>
+              <% if (it.venue_name) { %><br/><span class="period"><%= it.venue_name %></span><% } %>
+            </td>
+            <td style="white-space:nowrap"><%= it.bb_number || "—" %></td>
             <td><%= it.number %><% if (it.paid_at && !it.paid_by_statement) { %><br/><span class="period">paid <%= fmtYmd(it.paid_at) %></span><% } %></td>
             <td class="num"><%= fmtR(it.total_cents) %></td>
           </tr>

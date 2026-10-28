@@ -94,6 +94,8 @@ function readStreamForm(body) {
     kitId: body.kitId ? parseInt(body.kitId, 10) || null : null,
     leadSource: clean(body.leadSource),
     accountClient: clean(body.accountClient).slice(0, 120),
+    lateName: clean(body.lateName).replace(/^late\s+/i, "").slice(0, 120),
+    bbNumber: clean(body.bbNumber).slice(0, 60),
     branch: body.branch === "capetown" ? "capetown" : "pretoria",
     chatEnabled: [].concat(body.chatEnabled || []).includes("1") ? 1 : 0,
     gear: readGear(body),
@@ -115,7 +117,8 @@ function streamFormValues(f) {
   return [f.title, f.embedCode, f.serviceDate || null, f.venueName || null, f.venueAddress || null,
     f.mapsLink || null, f.contactName || null, f.contactPhone || null, f.arrivalTime || null,
     f.crewNotes || null, f.kitId, f.leadSource || null,
-    f.gear.length ? JSON.stringify(f.gear) : null, f.branch, f.chatEnabled, f.accountClient || null];
+    f.gear.length ? JSON.stringify(f.gear) : null, f.branch, f.chatEnabled, f.accountClient || null,
+    f.accountClient ? f.lateName || null : null, f.accountClient ? f.bbNumber || null : null];
 }
 
 // Other funerals on the same day using the same kit.
@@ -227,8 +230,8 @@ router.post("/streams/new", (req, res) => {
   const slug = makeUniqueSlug(f.title);
   db.prepare(
     `INSERT INTO streams (title, embed_code, service_date, venue_name, venue_address, maps_link,
-       contact_name, contact_phone, arrival_time, crew_notes, kit_id, lead_source, extra_gear, branch, chat_enabled, account_client, slug, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       contact_name, contact_phone, arrival_time, crew_notes, kit_id, lead_source, extra_gear, branch, chat_enabled, account_client, late_name, bb_number, slug, created_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(...streamFormValues(f), slug, req.session.staffId);
 
   const created = db.prepare("SELECT id FROM streams WHERE slug = ?").get(slug);
@@ -413,7 +416,7 @@ router.post("/streams/:slug/edit", (req, res) => {
   db.prepare(
     `UPDATE streams SET title = ?, embed_code = ?, service_date = ?, venue_name = ?, venue_address = ?,
        maps_link = ?, contact_name = ?, contact_phone = ?, arrival_time = ?, crew_notes = ?, kit_id = ?,
-       lead_source = ?, extra_gear = ?, branch = ?, chat_enabled = ?, account_client = ?
+       lead_source = ?, extra_gear = ?, branch = ?, chat_enabled = ?, account_client = ?, late_name = ?, bb_number = ?
      WHERE id = ?`
   ).run(...streamFormValues(f), stream.id);
   broadcastChatState(req, stream.slug, f.chatEnabled);

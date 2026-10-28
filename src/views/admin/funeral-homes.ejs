@@ -19,6 +19,17 @@ const f = form || {};
         <label for="name">Name (as it should appear on invoices)</label>
         <input type="text" id="name" name="name" required placeholder="e.g. AVBOB Centurion" value="<%= f.name || '' %>" />
 
+        <label for="parentId">Part of a group?</label>
+        <select id="parentId" name="parentId">
+          <option value="">No — this is the main company / stands alone</option>
+          <% groups.forEach(g => { %><option value="<%= g.id %>" <%= String(f.parent_id || "") === String(g.id) ? "selected" : "" %>>Branch of <%= g.name %></option><% }) %>
+        </select>
+        <p class="help">Add AVBOB first, then each branch (AVBOB Centurion, AVBOB Pretoria North…) as a branch of AVBOB. You can make a statement per branch, or one for AVBOB with all its branches.</p>
+
+        <label for="supplierNumber">Our supplier number with them</label>
+        <input type="text" id="supplierNumber" name="supplierNumber" placeholder="<%= f.parent_id ? 'leave empty to use the group\'s number' : 'e.g. the vendor number they gave us' %>" value="<%= f.supplier_number || '' %>" />
+        <p class="help">Printed on every invoice and statement to this funeral home. Branches use the group's number unless you fill one in here.</p>
+
         <label for="contactPerson">Contact person / accounts</label>
         <input type="text" id="contactPerson" name="contactPerson" value="<%= f.contact_person || '' %>" />
 
@@ -67,8 +78,10 @@ const f = form || {};
           <tbody>
             <% homes.forEach(h => { %>
               <tr>
-                <td>
+                <td class="<%= h.isBranch ? 'branch-cell' : '' %>">
                   <strong><%= h.name %></strong>
+                  <% if (h.branchCount) { %><span class="tag"><%= h.branchCount %> branch<%= h.branchCount === 1 ? "" : "es" %></span><% } %>
+                  <% if (h.supplier) { %><div class="sub">Supplier no: <%= h.supplier %><%= h.isBranch && !h.supplier_number ? " (group)" : "" %></div><% } %>
                   <% if (h.address) { %><div class="sub home-addr"><%= h.address %></div><% } %>
                   <% if (!h.email || !h.address) { %><div class="sub warn-text">Missing <%= [!h.address && "address", !h.email && "email"].filter(Boolean).join(" & ") %></div><% } %>
                 </td>

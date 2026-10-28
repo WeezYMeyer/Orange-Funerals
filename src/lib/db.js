@@ -308,6 +308,17 @@ db.prepare(
 ).run();
 db.prepare("INSERT OR IGNORE INTO funeral_homes (name, email, address) SELECT client, client_email, client_address FROM statements").run();
 
+// Branches under a group (AVBOB Centurion under AVBOB), the supplier number the
+// funeral home gave us, and their per-funeral reference ("Late <surname>" + BB number).
+{
+  const homeCols = new Set(db.prepare("PRAGMA table_info(funeral_homes)").all().map((c) => c.name));
+  if (!homeCols.has("parent_id")) db.exec("ALTER TABLE funeral_homes ADD COLUMN parent_id INTEGER REFERENCES funeral_homes(id)");
+  if (!homeCols.has("supplier_number")) db.exec("ALTER TABLE funeral_homes ADD COLUMN supplier_number TEXT");
+  const streamCols = new Set(db.prepare("PRAGMA table_info(streams)").all().map((c) => c.name));
+  if (!streamCols.has("late_name")) db.exec("ALTER TABLE streams ADD COLUMN late_name TEXT");   // shown as "Late <surname>"
+  if (!streamCols.has("bb_number")) db.exec("ALTER TABLE streams ADD COLUMN bb_number TEXT");   // funeral home's BB number
+}
+
 // --- Contacts waiting to be sent to the Orange Platform CRM (added Oct 2026) ---
 // One row per email with a change the platform hasn't received yet. See lib/crmSync.js.
 db.exec(`

@@ -124,6 +124,34 @@
   </select>
   <p class="help">Pick the funeral home when they gave us the funeral: the quote and invoice are made out to them with their details, and it goes on their <a href="/admin/statements">statement</a>. Not on the list? Add it under <a href="/admin/funeral-homes" target="_blank">Funeral homes</a> (opens in a new tab), or save the funeral now and pick the funeral home later under Edit.</p>
 
+  <div id="homeRef" class="home-ref" <%= f.accountClient ? "" : "hidden" %>>
+    <div class="two-col">
+      <div>
+        <label for="lateName">Late (surname of the deceased)</label>
+        <div class="prefix-input"><span>Late</span><input type="text" id="lateName" name="lateName" placeholder="e.g. Rohrs" value="<%= f.lateName || '' %>" /></div>
+      </div>
+      <div>
+        <label for="bbNumber">BB number</label>
+        <input type="text" id="bbNumber" name="bbNumber" placeholder="from the funeral home" value="<%= f.bbNumber || '' %>" />
+      </div>
+    </div>
+    <p class="help">The funeral home's reference for this funeral — printed on the invoice and the statement as "Late Rohrs · BB …". You can add the BB number later under Edit.</p>
+  </div>
+  <script>
+    (function () {
+      const sel = document.getElementById("accountClient");
+      const box = document.getElementById("homeRef");
+      const late = document.getElementById("lateName");
+      const title = document.getElementById("title");
+      const sync = () => {
+        box.hidden = !sel.value;
+        // Suggest the surname from the title ("Service for John Smith" -> "Smith").
+        if (sel.value && !late.value && title && title.value.trim()) late.value = title.value.trim().split(/\s+/).pop();
+      };
+      sel.addEventListener("change", sync);
+    })();
+  </script>
+
   <label for="crewNotes">Notes for the operator</label>
   <textarea id="crewNotes" name="crewNotes" class="short" placeholder="Parking, who to report to, dress code, camera position…"><%= f.crewNotes || '' %></textarea>
 </fieldset>

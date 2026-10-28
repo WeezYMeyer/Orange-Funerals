@@ -19,7 +19,7 @@
         <label for="client">Funeral home</label>
         <select id="client" name="client" required>
           <option value="">Choose…</option>
-          <% accounts.forEach(a => { %><option value="<%= a %>" <%= query.client.toLowerCase() === a.toLowerCase() ? "selected" : "" %>><%= a %></option><% }) %>
+          <% accounts.forEach(a => { %><option value="<%= a.name %>" <%= query.client.toLowerCase() === a.name.toLowerCase() ? "selected" : "" %>><%= a.label %></option><% }) %>
         </select>
       </div>
       <div>
@@ -65,25 +65,29 @@
         <form method="post" action="/admin/statements">
           <% ["client", "branch", "from", "to"].forEach(k => { %><input type="hidden" name="<%= k %>" value="<%= query[k] %>" /><% }) %>
           <div class="table-scroll"><table>
-            <thead><tr><th></th><th>Service date</th><th>Funeral</th><th>Invoice</th><th class="num">Amount</th></tr></thead>
+            <thead><tr><th></th><th>Service date</th><th>Funeral</th><th>Reference</th><th>Invoice</th><th class="num">Amount</th></tr></thead>
             <tbody>
               <% candidates.invoices.forEach(i => { %>
                 <tr>
                   <td><input type="checkbox" name="docIds" value="<%= i.id %>" checked class="stmt-pick" data-cents="<%= i.total_cents %>" /></td>
                   <td><%= i.service_date ? fmtYmd(i.service_date.slice(0, 10)) : "—" %></td>
-                  <td><a href="/admin/streams/<%= i.slug %>#billing"><%= i.title %></a></td>
+                  <td><a href="/admin/streams/<%= i.slug %>#billing"><%= i.title %></a><% if (i.account_client && i.account_client.toLowerCase() !== query.client.toLowerCase()) { %><div class="sub"><%= i.account_client %></div><% } %></td>
+                  <td>
+                    <%= i.late_name ? "Late " + i.late_name : "" %>
+                    <% if (i.bb_number) { %><div class="sub"><%= (/^bb/i.test(i.bb_number) ? i.bb_number : "BB " + i.bb_number) %></div><% } else { %><div class="sub warn-text"><a class="warn-text" href="/admin/streams/<%= i.slug %>/edit">No BB number — add</a></div><% } %>
+                  </td>
                   <td><a href="/admin/streams/<%= i.slug %>/invoice"><%= i.number %></a></td>
                   <td class="num"><%= fmtR(i.total_cents) %></td>
                 </tr>
               <% }) %>
             </tbody>
-            <tfoot><tr><td colspan="4"><strong>Statement total</strong></td><td class="num"><strong id="stmt-total"><%= fmtR(candidates.invoices.reduce((t, i) => t + i.total_cents, 0)) %></strong></td></tr></tfoot>
+            <tfoot><tr><td colspan="5"><strong>Statement total</strong></td><td class="num"><strong id="stmt-total"><%= fmtR(candidates.invoices.reduce((t, i) => t + i.total_cents, 0)) %></strong></td></tr></tfoot>
           </table></div>
 
           <div class="stmt-to-card">
             <strong>Statement for <%= query.client %></strong>
             <% if (acct) { %>
-              <div class="home-addr"><%= [acct.address, acct.contact_person && "Attn: " + acct.contact_person, acct.email, acct.vat_number && "VAT no: " + acct.vat_number].filter(Boolean).join("\n") || "No billing details yet." %></div>
+              <div class="home-addr"><%= [acct.address, acct.contact_person && "Attn: " + acct.contact_person, acct.email, acct.vat_number && "VAT no: " + acct.vat_number, acct.supplier && "Our supplier no: " + acct.supplier].filter(Boolean).join("\n") || "No billing details yet." %></div>
               <a href="/admin/funeral-homes?edit=<%= acct.id %>#form">Edit <%= acct.name %>'s details</a>
             <% } %>
           </div>

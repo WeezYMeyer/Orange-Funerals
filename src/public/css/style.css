@@ -794,3 +794,10 @@ td.overdue { color: var(--danger); font-weight: 600; }
 .stmt-to-card .home-addr { color: var(--muted); margin: 4px 0 6px; }
 @media (max-width: 900px) { .homes-layout, .two-col { grid-template-columns: 1fr; } }
 .homes-layout > * { min-width: 0; }
+
+/* Funeral home reference on a funeral: Late <surname> + BB number */
+.home-ref { background: #fff6ef; border: 1px solid #f3c9ae; border-radius: var(--radius); padding: 4px 14px 2px; margin-top: 12px; }
+.prefix-input { display: flex; align-items: stretch; }
+.prefix-input span { display: flex; align-items: center; padding: 0 10px; border: 1px solid var(--line); border-right: 0; border-radius: var(--radius) 0 0 var(--radius); background: #f3f1ed; color: var(--muted); font-size: 14px; }
+.prefix-input input { border-top-left-radius: 0; border-bottom-left-radius: 0; flex: 1; min-width: 0; }
+.branch-cell { padding-left: 28px !important; border-left: 3px solid #f3c9ae; }

@@ -256,6 +256,38 @@ function homeAddress(h) {
     h.reg_number ? `Reg no: ${h.reg_number}` : "",
   ].map((l) => String(l || "").trim()).filter(Boolean).join("\n");
 }
+// The supplier number the funeral home gave us (a branch uses its group's if it has none).
+function supplierFor(h) {
+  if (!h) return "";
+  if (h.supplier_number) return h.supplier_number;
+  const parent = h.parent_id ? db.prepare("SELECT supplier_number FROM funeral_homes WHERE id = ?").get(h.parent_id) : null;
+  return (parent && parent.supplier_number) || "";
+}
+// A funeral home plus its branches (AVBOB + AVBOB Centurion, AVBOB Pretoria North…).
+function groupNames(client) {
+  const h = findHome(client);
+  if (!h) return [client];
+  return [h.name, ...db.prepare("SELECT name FROM funeral_homes WHERE parent_id = ?").all(h.id).map((r) => r.name)];
+}
+// Dropdown entries: each group ("AVBOB — all branches") followed by its branches.
+function homeOptions() {
+  const all = funeralHomes();
+  const out = [];
+  const tops = all.filter((h) => !h.parent_id || !all.some((p) => p.id === h.parent_id));
+  for (const top of tops) {
+    const kids = all.filter((h) => h.parent_id === top.id);
+    out.push({ name: top.name, label: kids.length ? `${top.name} — all branches` : top.name });
+    for (const k of kids) out.push({ name: k.name, label: `\u00a0\u00a0\u00a0\u00a0${k.name}` });
+  }
+  return out;
+}
+// "Late Rohrs · BB 12345" for a funeral billed to a funeral home.
+function funeralRef(stream) {
+  return [stream.late_name ? `Late ${stream.late_name}` : "", stream.bb_number ? (/^bb/i.test(stream.bb_number) ? stream.bb_number : "BB " + stream.bb_number) : ""]
+    .filter(Boolean)
+    .join(" · ");
+}
+
 // Billing details for a funeral home (falls back to just the name).
 function accountDetails(client) {
   const h = findHome(client);
@@ -312,7 +344,7 @@ function branchDetails(branch, preparer) {
   return { bank, from, s: all };
 }
 
-const helpers = { fmtR, fmtYmd, transportCents, lineCents };
+const helpers = { fmtR, fmtYmd, transportCents, lineCents, funeralRef };
 
 // ------------------------------------------------------- quote / invoice
 
@@ -405,6 +437,7 @@ router.get(`/streams/:slug/${KIND}`, (req, res) => {
       };
   res.render("admin/document-view", {
     stream,
+    supplier: stream.account_client ? supplierFor(findHome(stream.account_client)) : "",
     doc,
     bank,
     from,
@@ -517,16 +550,39 @@ function readHomeForm(body) {
   const f = {
     name: t(body.name, 120), contact_person: t(body.contactPerson), phone: t(body.phone, 60), email: t(body.email, 200),
     address: t(body.address, 600), vat_number: t(body.vatNumber, 40), reg_number: t(body.regNumber, 40), notes: t(body.notes, 1000),
+    supplier_number: t(body.supplierNumber, 60), parent_id: parseInt(body.parentId, 10) || null,
   };
   let error = null;
   if (!f.name) error = "Please enter the funeral home's name.";
   else if (f.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email)) error = "That email address doesn't look right.";
   return { f, error };
 }
+// One level only: a group (AVBOB) with branches under it.
+function parentError(f, selfId) {
+  if (!f.parent_id) return null;
+  const parent = db.prepare("SELECT * FROM funeral_homes WHERE id = ?").get(f.parent_id);
+  if (!parent || parent.id === selfId) return "Pick a different group.";
+  if (parent.parent_id) return `${parent.name} is itself a branch — pick the main group instead.`;
+  if (selfId && db.prepare("SELECT 1 FROM funeral_homes WHERE parent_id = ?").get(selfId)) {
+    return "This funeral home has branches under it, so it can't be a branch itself.";
+  }
+  return null;
+}
 
 function renderHomes(res, { editing = null, form = null, error = null, notice = null } = {}) {
-  const homes = funeralHomes().map((h) => ({
+  const all = funeralHomes();
+  const byName = (a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+  // Groups first, each followed by its branches.
+  const ordered = [];
+  for (const top of all.filter((h) => !h.parent_id || !all.some((p) => p.id === h.parent_id)).sort(byName)) {
+    ordered.push(top);
+    ordered.push(...all.filter((h) => h.parent_id === top.id).sort(byName));
+  }
+  const homes = ordered.map((h) => ({
     ...h,
+    supplier: supplierFor(h),
+    isBranch: Boolean(h.parent_id && all.some((p) => p.id === h.parent_id)),
+    branchCount: all.filter((c) => c.parent_id === h.id).length,
     funerals: db.prepare("SELECT COUNT(*) AS n FROM streams WHERE account_client = ? COLLATE NOCASE").get(h.name).n,
     unpaid: db
       .prepare(
@@ -535,7 +591,8 @@ function renderHomes(res, { editing = null, form = null, error = null, notice = 
       )
       .get(h.name).c,
   }));
-  res.render("admin/funeral-homes", { homes, editing, form: form || editing || {}, error, notice, fmtR });
+  const groups = all.filter((h) => !h.parent_id && (!editing || h.id !== editing.id));
+  res.render("admin/funeral-homes", { homes, groups, editing, form: form || editing || {}, error, notice, fmtR });
 }
 
 router.get("/funeral-homes", (req, res) => {
@@ -544,7 +601,8 @@ router.get("/funeral-homes", (req, res) => {
 });
 
 router.post("/funeral-homes", (req, res) => {
-  const { f, error } = readHomeForm(req.body);
+  const { f, error: formError } = readHomeForm(req.body);
+  const error = formError || parentError(f, null);
   const clash = !error && findHome(f.name);
   if (error || (clash && clash.active)) {
     return renderHomes(res, { form: f, error: error || `${clash.name} is already on the list.` });
@@ -553,7 +611,8 @@ router.post("/funeral-homes", (req, res) => {
     // Removed earlier: bring it back with the new details.
     db.prepare(
       `UPDATE funeral_homes SET name = @name, contact_person = @contact_person, phone = @phone, email = @email,
-         address = @address, vat_number = @vat_number, reg_number = @reg_number, notes = @notes, active = 1 WHERE id = @id`
+         address = @address, vat_number = @vat_number, reg_number = @reg_number, notes = @notes,
+         supplier_number = @supplier_number, parent_id = @parent_id, active = 1 WHERE id = @id`
     ).run({ ...f, id: clash.id });
   } else {
     const cols = Object.keys(f);
@@ -567,7 +626,8 @@ router.post("/funeral-homes", (req, res) => {
 router.post("/funeral-homes/:id(\\d+)/edit", (req, res) => {
   const home = db.prepare("SELECT * FROM funeral_homes WHERE id = ?").get(parseInt(req.params.id, 10));
   if (!home) return res.status(404).send("Funeral home not found");
-  const { f, error } = readHomeForm(req.body);
+  const { f, error: formError } = readHomeForm(req.body);
+  const error = formError || parentError(f, home.id);
   const clash = !error && findHome(f.name);
   if (error || (clash && clash.id !== home.id)) {
     return renderHomes(res, { editing: home, form: { ...f, id: home.id }, error: error || `Another funeral home is already called ${f.name}.` });
@@ -575,7 +635,8 @@ router.post("/funeral-homes/:id(\\d+)/edit", (req, res) => {
   db.transaction(() => {
     db.prepare(
       `UPDATE funeral_homes SET name = @name, contact_person = @contact_person, phone = @phone, email = @email,
-         address = @address, vat_number = @vat_number, reg_number = @reg_number, notes = @notes WHERE id = @id`
+         address = @address, vat_number = @vat_number, reg_number = @reg_number, notes = @notes,
+         supplier_number = @supplier_number, parent_id = @parent_id WHERE id = @id`
     ).run({ ...f, id: home.id });
     if (f.name !== home.name) {
       // Renamed: keep its funerals, lead source and unpaid statements linked.
@@ -609,14 +670,16 @@ function nextStatementNumber() {
 
 // What the statement builder needs for one client / branch / period.
 function statementCandidates({ client, branch, from, to }) {
-  const range = `lower(trim(s.account_client)) = lower(trim(@client)) AND s.branch = @branch
+  // A group's statement (AVBOB) includes the funerals of all its branches.
+  const range = `lower(trim(s.account_client)) IN (SELECT lower(trim(value)) FROM json_each(@names)) AND s.branch = @branch
      AND (@from = '' OR substr(s.service_date, 1, 10) >= @from)
      AND substr(s.service_date, 1, 10) <= @to`;
-  const args = { client, branch, from: from || "", to };
+  const args = { names: JSON.stringify(groupNames(client)), branch, from: from || "", to };
   // Unpaid invoices not on any statement yet.
   const invoices = db
     .prepare(
-      `SELECT d.id, d.number, d.total_cents, d.stream_id, s.slug, s.title, s.service_date, s.venue_name
+      `SELECT d.id, d.number, d.total_cents, d.stream_id, s.slug, s.title, s.service_date, s.venue_name,
+              s.account_client, s.late_name, s.bb_number
        FROM documents d JOIN streams s ON s.id = d.stream_id
        WHERE d.kind = 'invoice' AND d.paid_at IS NULL
          AND d.id NOT IN (SELECT document_id FROM statement_items)
@@ -627,7 +690,7 @@ function statementCandidates({ client, branch, from, to }) {
   // Funerals for this client with no invoice yet.
   const missing = db
     .prepare(
-      `SELECT s.id, s.slug, s.title, s.service_date FROM streams s
+      `SELECT s.id, s.slug, s.title, s.service_date, s.account_client FROM streams s
        WHERE NOT EXISTS (SELECT 1 FROM documents d WHERE d.stream_id = s.id AND d.kind = 'invoice')
          AND ${range}
        ORDER BY s.service_date`
@@ -660,7 +723,7 @@ function statementItems(statementId) {
   return db
     .prepare(
       `SELECT d.id, d.number, d.total_cents, d.paid_at, d.stream_id, d.bill_to_email, si.paid_by_statement,
-              s.slug, s.title, s.service_date, s.venue_name
+              s.slug, s.title, s.service_date, s.venue_name, s.account_client, s.late_name, s.bb_number
        FROM statement_items si JOIN documents d ON d.id = si.document_id JOIN streams s ON s.id = d.stream_id
        WHERE si.statement_id = ?
        ORDER BY s.service_date, d.number`
@@ -680,10 +743,11 @@ router.get("/statements", (req, res) => {
     .prepare("SELECT * FROM statements ORDER BY id DESC LIMIT 200")
     .all()
     .map((st) => ({ ...st, ...statementTotals(statementItems(st.id)), count: statementItems(st.id).length }));
-  const acct = query.client ? findHome(query.client) : null;
+  const home = query.client ? findHome(query.client) : null;
+  const acct = home ? { ...home, supplier: supplierFor(home) } : null;
   res.render("admin/statements", {
     query,
-    accounts: accountClients(),
+    accounts: homeOptions(),
     statements,
     candidates: query.client ? statementCandidates(query) : null,
     acct,
@@ -784,6 +848,9 @@ router.get("/statements/:id(\\d+)", (req, res) => {
   const { bank, from, s } = branchDetails(st.branch, preparer);
   res.render("admin/statement-view", {
     st, items, totals: statementTotals(items), bank, from, s, preparer,
+    supplier: supplierFor(findHome(st.client)),
+    // Group statement (AVBOB): show which branch each funeral came from.
+    showBranch: items.some((it) => (it.account_client || "").toLowerCase() !== st.client.toLowerCase()),
     dateOf: (sd) => (sd ? fmtYmd(String(sd).slice(0, 10)) : "—"),
     ...helpers,
   });

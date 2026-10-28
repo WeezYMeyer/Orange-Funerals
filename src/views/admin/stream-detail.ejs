@@ -131,6 +131,10 @@ const scheduled = fmtScheduled(stream.service_date);
       </dd>
       <dt>Branch</dt><dd><%= stream.branch === "capetown" ? "Cape Town" : "Pretoria" %></dd>
       <dt>Came from</dt><dd><%= stream.lead_source || "—" %></dd>
+      <% if (stream.account_client) { %>
+        <dt>Billed to</dt><dd><%= stream.account_client %></dd>
+        <dt>Their reference</dt><dd><%= stream.late_name ? "Late " + stream.late_name : "—" %> · <%= stream.bb_number ? (/^bb/i.test(stream.bb_number) ? stream.bb_number : "BB " + stream.bb_number) : "no BB number yet" %></dd>
+      <% } %>
       <dt>Client contact</dt><dd><%= [stream.contact_name, stream.contact_phone].filter(Boolean).join(" · ") || "—" %></dd>
       <dt>Kit</dt>
       <dd>
