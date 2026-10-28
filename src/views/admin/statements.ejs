@@ -1,0 +1,152 @@
+<%- include("../partials/admin-head", { title: "Statements" }) %>
+<%- include("../partials/admin-nav") %>
+
+<div class="container wide-cal">
+  <div class="cal-head">
+    <h1>Statements</h1>
+    <div class="cal-nav"><a class="btn secondary small" href="/admin/finance">Finance</a></div>
+  </div>
+  <p class="help">For companies like AVBOB that pay for several funerals at once. Each funeral keeps its own invoice; a statement lists the company's unpaid invoices for a period. When they pay, press <strong>Mark paid</strong> on the statement and every invoice on it is marked paid.</p>
+
+  <% if (notice === "deleted") { %><div class="notice-box">Statement deleted. Its invoices are available for a new statement again.</div><% } %>
+  <% if (notice === "invoices") { %><div class="notice-box">Invoices created. They're ticked below, ready for the statement.</div><% } %>
+  <% if (error) { %><div class="error-box"><%= error %></div><% } %>
+
+  <div class="panel" id="build">
+    <h2 class="panel-title">New statement</h2>
+    <form method="get" action="/admin/statements#build" class="stmt-filter">
+      <div>
+        <label for="client">Account client</label>
+        <input type="text" id="client" name="client" list="accountClients" required placeholder="e.g. AVBOB" value="<%= query.client %>" />
+        <datalist id="accountClients"><% accounts.forEach(a => { %><option value="<%= a %>"></option><% }) %></datalist>
+      </div>
+      <div>
+        <label for="branch">Branch</label>
+        <select id="branch" name="branch">
+          <option value="pretoria" <%= query.branch !== "capetown" ? "selected" : "" %>>Pretoria</option>
+          <option value="capetown" <%= query.branch === "capetown" ? "selected" : "" %>>Cape Town</option>
+        </select>
+      </div>
+      <div>
+        <label for="from">Services from</label>
+        <input type="date" id="from" name="from" value="<%= query.from %>" />
+      </div>
+      <div>
+        <label for="to">up to and including</label>
+        <input type="date" id="to" name="to" value="<%= query.to %>" />
+      </div>
+      <div class="stmt-filter-btn"><button class="btn" type="submit">Find invoices</button></div>
+    </form>
+    <p class="help">Funerals belong to a client through the <strong>Account client</strong> field on the funeral. Leave "Services from" empty to include everything unpaid up to the end date. Invoices already on a statement are never listed twice.</p>
+
+    <% if (candidates) { %>
+      <% if (candidates.missing.length) { %>
+        <div class="stmt-missing">
+          <strong><%= candidates.missing.length %> <%= query.client %> funeral<%= candidates.missing.length === 1 ? " has" : "s have" %> no invoice yet</strong>
+          <form method="post" action="/admin/statements/create-invoices">
+            <% ["client", "branch", "from", "to"].forEach(k => { %><input type="hidden" name="<%= k %>" value="<%= query[k] %>" /><% }) %>
+            <% candidates.missing.forEach(m => { %>
+              <label class="pick check-row">
+                <input type="checkbox" name="streamIds" value="<%= m.id %>" checked />
+                <span><%= m.service_date ? fmtYmd(m.service_date.slice(0, 10)) : "—" %> · <a href="/admin/streams/<%= m.slug %>#billing"><%= m.title %></a></span>
+              </label>
+            <% }) %>
+            <button class="btn small" type="submit">Create these invoices</button>
+            <p class="help">Uses the standard package plus each funeral's gear and transport from its quote, billed to <%= query.client %>.</p>
+          </form>
+        </div>
+      <% } %>
+
+      <% if (candidates.invoices.length === 0) { %>
+        <p class="help">No unpaid <%= query.client %> invoices for <%= query.branch === "capetown" ? "Cape Town" : "Pretoria" %> in this period that aren't already on a statement.</p>
+      <% } else { %>
+        <form method="post" action="/admin/statements">
+          <% ["client", "branch", "from", "to"].forEach(k => { %><input type="hidden" name="<%= k %>" value="<%= query[k] %>" /><% }) %>
+          <div class="table-scroll"><table>
+            <thead><tr><th></th><th>Service date</th><th>Funeral</th><th>Invoice</th><th class="num">Amount</th></tr></thead>
+            <tbody>
+              <% candidates.invoices.forEach(i => { %>
+                <tr>
+                  <td><input type="checkbox" name="docIds" value="<%= i.id %>" checked class="stmt-pick" data-cents="<%= i.total_cents %>" /></td>
+                  <td><%= i.service_date ? fmtYmd(i.service_date.slice(0, 10)) : "—" %></td>
+                  <td><a href="/admin/streams/<%= i.slug %>#billing"><%= i.title %></a></td>
+                  <td><a href="/admin/streams/<%= i.slug %>/invoice"><%= i.number %></a></td>
+                  <td class="num"><%= fmtR(i.total_cents) %></td>
+                </tr>
+              <% }) %>
+            </tbody>
+            <tfoot><tr><td colspan="4"><strong>Statement total</strong></td><td class="num"><strong id="stmt-total"><%= fmtR(candidates.invoices.reduce((t, i) => t + i.total_cents, 0)) %></strong></td></tr></tfoot>
+          </table></div>
+
+          <div class="stmt-to">
+            <div>
+              <label for="clientEmail"><%= query.client %> accounts email <span class="legend-note">optional, shown on the statement</span></label>
+              <input type="email" id="clientEmail" name="clientEmail" value="<%= acct ? acct.email : '' %>" />
+            </div>
+            <div>
+              <label for="clientAddress">Address / reference <span class="legend-note">optional</span></label>
+              <input type="text" id="clientAddress" name="clientAddress" value="<%= acct ? acct.address : '' %>" />
+            </div>
+          </div>
+          <label for="notes">Note on the statement <span class="legend-note">optional</span></label>
+          <textarea id="notes" name="notes" class="short" placeholder="e.g. Branch manager / order numbers"></textarea>
+          <button class="btn" type="submit">Create statement</button>
+        </form>
+      <% } %>
+
+      <% if (candidates.elsewhere.length) { %>
+        <p class="help">Already on a statement, so not listed:
+          <% candidates.elsewhere.forEach((e, n) => { %><%= n ? ", " : "" %><%= e.number %> (<%= e.title %>) on <a href="/admin/statements/<%= e.statement_id %>"><%= e.statement_number %></a><% }) %>.
+          To put them on a new statement, delete the old one first.
+        </p>
+      <% } %>
+    <% } %>
+  </div>
+
+  <div class="panel">
+    <h2 class="panel-title">All statements</h2>
+    <% if (statements.length === 0) { %>
+      <p class="help">No statements yet.</p>
+    <% } else { %>
+      <div class="table-scroll"><table>
+        <thead><tr><th>Statement</th><th>Client</th><th>Branch</th><th>Period</th><th class="num">Funerals</th><th class="num">Total</th><th class="num">Due</th><th>Status</th><th></th></tr></thead>
+        <tbody>
+          <% statements.forEach(st => { %>
+            <tr>
+              <td><a href="/admin/statements/<%= st.id %>"><%= st.number %></a></td>
+              <td><%= st.client %></td>
+              <td><%= st.branch === "capetown" ? "Cape Town" : "Pretoria" %></td>
+              <td><%= fmtYmd(st.period_from) %> – <%= fmtYmd(st.period_to) %></td>
+              <td class="num"><%= st.count %></td>
+              <td class="num"><%= fmtR(st.total) %></td>
+              <td class="num"><%= fmtR(st.due) %></td>
+              <td><% if (st.paid_at) { %><span class="tag crew-confirmed">Paid</span><% } else { %><span class="tag crew-asked">Unpaid</span><% } %></td>
+              <td>
+                <form method="post" action="/admin/statements/<%= st.id %>/<%= st.paid_at ? 'unpaid' : 'paid' %>" style="margin:0"
+                      onsubmit="return confirm('<%= st.paid_at ? `Mark ${st.number} as unpaid? Invoices it marked paid go back to unpaid.` : `Mark ${st.number} and all its invoices as paid?` %>');">
+                  <button class="btn small secondary" type="submit"><%= st.paid_at ? "Mark unpaid" : "Mark paid" %></button>
+                </form>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table></div>
+    <% } %>
+  </div>
+</div>
+<script>
+  (function () {
+    const boxes = document.querySelectorAll(".stmt-pick");
+    const out = document.getElementById("stmt-total");
+    if (!out) return;
+    const fmt = (c) => "R" + (c / 100).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+    const update = () => {
+      let t = 0;
+      boxes.forEach((b) => { if (b.checked) t += Number(b.dataset.cents) || 0; });
+      out.textContent = fmt(t);
+    };
+    boxes.forEach((b) => b.addEventListener("change", update));
+  })();
+</script>
+</body>
+</html>

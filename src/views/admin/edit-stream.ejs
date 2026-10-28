@@ -12,6 +12,7 @@ const f = form || {
   crewNotes: stream.crew_notes,
   kitId: stream.kit_id,
   leadSource: stream.lead_source,
+  accountClient: stream.account_client,
   branch: stream.branch,
   chatEnabled: stream.chat_enabled,
   gear: (() => { try { return JSON.parse(stream.extra_gear || "[]"); } catch (e) { return []; } })(),
@@ -29,7 +30,7 @@ const f = form || {
       <div class="error-box"><%= error %></div>
     <% } %>
     <form method="post" action="/admin/streams/<%= stream.slug %>/edit">
-      <%- include("../partials/stream-fields", { f, kits, sources }) %>
+      <%- include("../partials/stream-fields", { f, kits, sources, accounts }) %>
       <button class="btn" type="submit">Save Changes</button>
       <a class="btn secondary" href="/admin/streams/<%= stream.slug %>">Cancel</a>
     </form>

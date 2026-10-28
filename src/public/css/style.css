@@ -771,3 +771,16 @@ td.overdue { color: var(--danger); font-weight: 600; }
 @media (max-width: 640px) {
   .chat-wrap { contain: size; height: 360px; min-height: 0; }
 }
+
+/* Statements for account clients (Oct 2026) */
+.stmt-filter { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr auto; gap: 12px; align-items: end; }
+.stmt-filter label { margin-top: 0; }
+.stmt-filter-btn .btn { white-space: nowrap; }
+.stmt-missing { background: #fff6ef; border: 1px solid #f3c9ae; border-radius: var(--radius); padding: 14px 16px; margin: 16px 0; }
+.stmt-missing form { margin-top: 8px; }
+.stmt-to { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
+@media (max-width: 760px) {
+  .stmt-filter, .stmt-to { grid-template-columns: 1fr; }
+}
+.table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.table-scroll table { min-width: 640px; }

@@ -111,6 +111,13 @@
   </datalist>
   <p class="help">Type a new source or pick one you've used before — the Finance tab totals income per source.</p>
 
+  <label for="accountClient">Account client <span class="legend-note">optional — pays on a statement</span></label>
+  <input type="text" id="accountClient" name="accountClient" list="accountClients" placeholder="e.g. AVBOB" value="<%= f.accountClient || '' %>" />
+  <datalist id="accountClients">
+    <% (typeof accounts !== "undefined" ? accounts : []).forEach(a => { %><option value="<%= a %>"></option><% }) %>
+  </datalist>
+  <p class="help">Fill this in when a company pays for several funerals together (e.g. AVBOB). The funeral still gets its own invoice, billed to this company, and appears on the company's statement under <a href="/admin/statements">Statements</a>. Leave empty for families who pay per invoice.</p>
+
   <label for="crewNotes">Notes for the operator</label>
   <textarea id="crewNotes" name="crewNotes" class="short" placeholder="Parking, who to report to, dress code, camera position…"><%= f.crewNotes || '' %></textarea>
 </fieldset>

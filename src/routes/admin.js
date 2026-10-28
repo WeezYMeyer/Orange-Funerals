@@ -40,6 +40,11 @@ function allSources() {
     .map((r) => r.s);
 }
 
+// Account clients (e.g. AVBOB) used before, offered as suggestions.
+function allAccounts() {
+  return billing.accountClients();
+}
+
 function publicUrlFor(stream) {
   return `${process.env.BASE_URL || "http://localhost:3000"}/watch/${stream.slug}`;
 }
@@ -88,6 +93,7 @@ function readStreamForm(body) {
     crewNotes: clean(body.crewNotes),
     kitId: body.kitId ? parseInt(body.kitId, 10) || null : null,
     leadSource: clean(body.leadSource),
+    accountClient: clean(body.accountClient).slice(0, 120),
     branch: body.branch === "capetown" ? "capetown" : "pretoria",
     chatEnabled: [].concat(body.chatEnabled || []).includes("1") ? 1 : 0,
     gear: readGear(body),
@@ -107,7 +113,7 @@ function streamFormValues(f) {
   return [f.title, f.embedCode, f.serviceDate || null, f.venueName || null, f.venueAddress || null,
     f.mapsLink || null, f.contactName || null, f.contactPhone || null, f.arrivalTime || null,
     f.crewNotes || null, f.kitId, f.leadSource || null,
-    f.gear.length ? JSON.stringify(f.gear) : null, f.branch, f.chatEnabled];
+    f.gear.length ? JSON.stringify(f.gear) : null, f.branch, f.chatEnabled, f.accountClient || null];
 }
 
 // Other funerals on the same day using the same kit.
@@ -207,20 +213,20 @@ router.get("/", (req, res) => {
 // --- New stream ---
 
 router.get("/streams/new", (req, res) => {
-  res.render("admin/new-stream", { error: null, form: {}, kits: allKits(), sources: allSources() });
+  res.render("admin/new-stream", { error: null, form: {}, kits: allKits(), sources: allSources(), accounts: allAccounts() });
 });
 
 router.post("/streams/new", (req, res) => {
   const { f, error } = readStreamForm(req.body);
   if (error) {
-    return res.render("admin/new-stream", { error, form: f, kits: allKits(), sources: allSources() });
+    return res.render("admin/new-stream", { error, form: f, kits: allKits(), sources: allSources(), accounts: allAccounts() });
   }
 
   const slug = makeUniqueSlug(f.title);
   db.prepare(
     `INSERT INTO streams (title, embed_code, service_date, venue_name, venue_address, maps_link,
-       contact_name, contact_phone, arrival_time, crew_notes, kit_id, lead_source, extra_gear, branch, chat_enabled, slug, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       contact_name, contact_phone, arrival_time, crew_notes, kit_id, lead_source, extra_gear, branch, chat_enabled, account_client, slug, created_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(...streamFormValues(f), slug, req.session.staffId);
 
   const created = db.prepare("SELECT id FROM streams WHERE slug = ?").get(slug);
@@ -313,6 +319,14 @@ router.get("/streams/:slug", (req, res) => {
     docs: Object.fromEntries(
       db.prepare("SELECT * FROM documents WHERE stream_id = ?").all(stream.id).map((d) => [d.kind, d])
     ),
+    statement: db
+      .prepare(
+        `SELECT st.id, st.number, st.paid_at FROM statement_items si
+         JOIN statements st ON st.id = si.statement_id
+         JOIN documents d ON d.id = si.document_id
+         WHERE d.stream_id = ? AND d.kind = 'invoice'`
+      )
+      .get(stream.id) || null,
     notice: req.query.notice || null,
   });
 });
@@ -382,7 +396,7 @@ router.post("/streams/:slug/resend-thanks", async (req, res) => {
 router.get("/streams/:slug/edit", (req, res) => {
   const stream = db.prepare("SELECT * FROM streams WHERE slug = ?").get(req.params.slug);
   if (!stream) return res.status(404).send("Stream not found");
-  res.render("admin/edit-stream", { stream, error: null, form: null, kits: allKits(), sources: allSources() });
+  res.render("admin/edit-stream", { stream, error: null, form: null, kits: allKits(), sources: allSources(), accounts: allAccounts() });
 });
 
 router.post("/streams/:slug/edit", (req, res) => {
@@ -391,13 +405,13 @@ router.post("/streams/:slug/edit", (req, res) => {
 
   const { f, error } = readStreamForm(req.body);
   if (error) {
-    return res.render("admin/edit-stream", { stream, error, form: f, kits: allKits(), sources: allSources() });
+    return res.render("admin/edit-stream", { stream, error, form: f, kits: allKits(), sources: allSources(), accounts: allAccounts() });
   }
 
   db.prepare(
     `UPDATE streams SET title = ?, embed_code = ?, service_date = ?, venue_name = ?, venue_address = ?,
        maps_link = ?, contact_name = ?, contact_phone = ?, arrival_time = ?, crew_notes = ?, kit_id = ?,
-       lead_source = ?, extra_gear = ?, branch = ?, chat_enabled = ?
+       lead_source = ?, extra_gear = ?, branch = ?, chat_enabled = ?, account_client = ?
      WHERE id = ?`
   ).run(...streamFormValues(f), stream.id);
   broadcastChatState(req, stream.slug, f.chatEnabled);
@@ -424,6 +438,7 @@ router.post("/streams/:slug/delete", (req, res) => {
     db.prepare("DELETE FROM stream_views WHERE stream_id = ?").run(streamId);
     db.prepare("DELETE FROM stream_crew WHERE stream_id = ?").run(streamId);
     db.prepare("DELETE FROM chat_messages WHERE stream_id = ?").run(streamId);
+    db.prepare("DELETE FROM statement_items WHERE document_id IN (SELECT id FROM documents WHERE stream_id = ?)").run(streamId);
     db.prepare("DELETE FROM documents WHERE stream_id = ?").run(streamId);
     db.prepare("DELETE FROM streams WHERE id = ?").run(streamId);
   });

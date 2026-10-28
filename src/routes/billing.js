@@ -175,11 +175,13 @@ function draftFor(stream, kind) {
   }
 
   const quote = kind === "invoice" ? loadDoc(stream, "quote") : null;
+  // Account clients (e.g. AVBOB) are billed as the company, not the family.
+  const acct = stream.account_client ? accountDetails(stream.account_client) : null;
   const base = quote || {
-    bill_to_name: stream.contact_name || "",
-    bill_to_phone: stream.contact_phone || "",
-    bill_to_email: "",
-    bill_to_address: "",
+    bill_to_name: acct ? acct.name : stream.contact_name || "",
+    bill_to_phone: acct ? "" : stream.contact_phone || "",
+    bill_to_email: acct ? acct.email : "",
+    bill_to_address: acct ? acct.address : "",
     package_label: s.package_label,
     package_details: s.package_details,
     package_cents: toCents(s.package_price),
@@ -228,6 +230,62 @@ function readDocForm(body) {
   doc.total_cents = totalCents(doc);
   const error = !doc.bill_to_name ? "Please enter who the document is addressed to." : null;
   return { doc, error };
+}
+
+// Account clients used before (on funerals or statements), for suggestions.
+function accountClients() {
+  return db
+    .prepare(
+      `SELECT account_client AS c FROM streams WHERE account_client IS NOT NULL AND account_client != ''
+       UNION SELECT client FROM statements ORDER BY 1 COLLATE NOCASE`
+    )
+    .all()
+    .map((r) => r.c);
+}
+// The company's email/address as last used on a statement or invoice.
+function accountDetails(client) {
+  const st = db
+    .prepare("SELECT client_email, client_address FROM statements WHERE lower(client) = lower(?) ORDER BY id DESC LIMIT 1")
+    .get(client);
+  const inv = db
+    .prepare(
+      `SELECT d.bill_to_email, d.bill_to_address FROM documents d JOIN streams s ON s.id = d.stream_id
+       WHERE lower(s.account_client) = lower(?) AND d.kind = 'invoice' ORDER BY d.id DESC LIMIT 1`
+    )
+    .get(client);
+  return {
+    name: client,
+    email: (st && st.client_email) || (inv && inv.bill_to_email) || "",
+    address: (st && st.client_address) || (inv && inv.bill_to_address) || "",
+  };
+}
+
+// Letterhead + bank account for a branch (same rules as quotes/invoices).
+function branchDetails(branch, preparer) {
+  const all = getSettings();
+  const ct = branch === "capetown";
+  const p = ct ? "ct_bank_" : "bank_";
+  const bank = {
+    name: all[p + "name"], branchName: all[p + "branch_name"], holder: all[p + "account_holder"],
+    number: all[p + "account_number"], branchCode: all[p + "branch_code"], type: all[p + "account_type"],
+    swift: all[p + "swift"], label: ct ? "Cape Town" : "Pretoria",
+  };
+  const from = ct
+    ? {
+        name: all.ct_business_name || all.business_name,
+        address: all.ct_business_address,
+        phone: all.ct_business_phone,
+        email: all.ct_business_email,
+        website: all.ct_business_website || all.business_website,
+      }
+    : {
+        name: all.business_name,
+        address: all.business_address,
+        phone: all.business_phone,
+        email: (preparer && preparer.email) || all.business_email,
+        website: all.business_website,
+      };
+  return { bank, from, s: all };
 }
 
 const helpers = { fmtR, fmtYmd, transportCents, lineCents };
@@ -351,6 +409,9 @@ router.post(`/streams/:slug/${KIND}/delete`, (req, res) => {
   const stream = loadStream(req, res);
   if (!stream) return;
   const emails = billedEmails(stream.id);
+  db.prepare(
+    "DELETE FROM statement_items WHERE document_id IN (SELECT id FROM documents WHERE stream_id = ? AND kind = ?)"
+  ).run(stream.id, req.params.kind);
   db.prepare("DELETE FROM documents WHERE stream_id = ? AND kind = ?").run(stream.id, req.params.kind);
   crm.enqueue(emails);
   res.redirect(`/admin/streams/${stream.slug}#billing`);
@@ -426,6 +487,235 @@ router.get("/finance", (req, res) => {
   });
 });
 
+// -------------------------------------------------------------- statements
+// For account clients like AVBOB: every funeral keeps its own invoice, and a
+// statement lists the client's unpaid invoices for a period so they can pay
+// them together. Paying the statement marks every invoice on it as paid.
+
+const YMD = /^\d{4}-\d{2}-\d{2}$/;
+
+function nextStatementNumber() {
+  const rows = db.prepare("SELECT number FROM statements").all();
+  const max = rows.reduce((m, r) => Math.max(m, parseInt(r.number.replace(/\D/g, ""), 10) || 0), 0);
+  return "ST" + String(max + 1).padStart(4, "0");
+}
+
+// What the statement builder needs for one client / branch / period.
+function statementCandidates({ client, branch, from, to }) {
+  const range = `lower(trim(s.account_client)) = lower(trim(@client)) AND s.branch = @branch
+     AND (@from = '' OR substr(s.service_date, 1, 10) >= @from)
+     AND substr(s.service_date, 1, 10) <= @to`;
+  const args = { client, branch, from: from || "", to };
+  // Unpaid invoices not on any statement yet.
+  const invoices = db
+    .prepare(
+      `SELECT d.id, d.number, d.total_cents, d.stream_id, s.slug, s.title, s.service_date, s.venue_name
+       FROM documents d JOIN streams s ON s.id = d.stream_id
+       WHERE d.kind = 'invoice' AND d.paid_at IS NULL
+         AND d.id NOT IN (SELECT document_id FROM statement_items)
+         AND ${range}
+       ORDER BY s.service_date`
+    )
+    .all(args);
+  // Funerals for this client with no invoice yet.
+  const missing = db
+    .prepare(
+      `SELECT s.id, s.slug, s.title, s.service_date FROM streams s
+       WHERE NOT EXISTS (SELECT 1 FROM documents d WHERE d.stream_id = s.id AND d.kind = 'invoice')
+         AND ${range}
+       ORDER BY s.service_date`
+    )
+    .all(args);
+  // Invoices already on another statement (so staff know why they're not listed).
+  const elsewhere = db
+    .prepare(
+      `SELECT d.number, st.id AS statement_id, st.number AS statement_number, s.title
+       FROM documents d JOIN streams s ON s.id = d.stream_id
+       JOIN statement_items si ON si.document_id = d.id JOIN statements st ON st.id = si.statement_id
+       WHERE d.kind = 'invoice' AND d.paid_at IS NULL AND ${range}
+       ORDER BY s.service_date`
+    )
+    .all(args);
+  return { invoices, missing, elsewhere };
+}
+
+function readStatementQuery(q) {
+  const client = String(q.client || "").trim().slice(0, 120);
+  const branch = q.branch === "capetown" ? "capetown" : "pretoria";
+  const to = YMD.test(q.to || "") ? q.to : todaySA();
+  // Empty "from" = every unpaid invoice up to "to" that isn't on a statement yet,
+  // so a late invoice for an older funeral is never skipped.
+  const from = YMD.test(q.from || "") ? q.from : "";
+  return { client, branch, from, to };
+}
+
+function statementItems(statementId) {
+  return db
+    .prepare(
+      `SELECT d.id, d.number, d.total_cents, d.paid_at, d.stream_id, d.bill_to_email, si.paid_by_statement,
+              s.slug, s.title, s.service_date, s.venue_name
+       FROM statement_items si JOIN documents d ON d.id = si.document_id JOIN streams s ON s.id = d.stream_id
+       WHERE si.statement_id = ?
+       ORDER BY s.service_date, d.number`
+    )
+    .all(statementId);
+}
+
+function statementTotals(items) {
+  const total = items.reduce((t, i) => t + i.total_cents, 0);
+  const due = items.filter((i) => !i.paid_at).reduce((t, i) => t + i.total_cents, 0);
+  return { total, paid: total - due, due };
+}
+
+router.get("/statements", (req, res) => {
+  const query = readStatementQuery(req.query);
+  const statements = db
+    .prepare("SELECT * FROM statements ORDER BY id DESC LIMIT 200")
+    .all()
+    .map((st) => ({ ...st, ...statementTotals(statementItems(st.id)), count: statementItems(st.id).length }));
+  const acct = query.client ? accountDetails(query.client) : null;
+  res.render("admin/statements", {
+    query,
+    accounts: accountClients(),
+    statements,
+    candidates: query.client ? statementCandidates(query) : null,
+    acct,
+    notice: req.query.notice || null,
+    error: req.query.error || null,
+    ...helpers,
+  });
+});
+
+// Create the missing invoices for ticked funerals (billed to the account client).
+router.post("/statements/create-invoices", (req, res) => {
+  const query = readStatementQuery(req.body);
+  const ids = [].concat(req.body.streamIds || []).map((v) => parseInt(v, 10)).filter(Boolean);
+  const emails = [];
+  db.transaction(() => {
+    for (const id of ids) {
+      const stream = db.prepare("SELECT * FROM streams WHERE id = ?").get(id);
+      if (!stream || loadDoc(stream, "invoice")) continue;
+      const d = draftFor(stream, "invoice");
+      const row = {
+        stream_id: stream.id, kind: "invoice", number: nextNumber("invoice"), prepared_by: req.session.staffId,
+        issue_date: d.issue_date, due_date: d.due_date,
+        bill_to_name: d.bill_to_name || stream.account_client || query.client, bill_to_phone: d.bill_to_phone || "",
+        bill_to_email: d.bill_to_email || "", bill_to_address: d.bill_to_address || "",
+        package_label: d.package_label, package_details: d.package_details || "", package_cents: d.package_cents || 0,
+        charge_transport: d.charge_transport ? 1 : 0, transport_km: d.transport_km || 0,
+        transport_rate_cents: d.transport_rate_cents || 0, notes: d.notes || "",
+        extra_items: JSON.stringify(d.items || []), gear_items: JSON.stringify(d.gear || []),
+        total_cents: totalCents(d),
+      };
+      const cols = Object.keys(row);
+      db.prepare(`INSERT INTO documents (${cols.join(", ")}) VALUES (${cols.map((c) => "@" + c).join(", ")})`).run(row);
+      emails.push(row.bill_to_email);
+    }
+  })();
+  crm.enqueue(emails);
+  const qs = new URLSearchParams({ client: query.client, branch: query.branch, from: query.from, to: query.to });
+  res.redirect(`/admin/statements?${qs}&notice=invoices#build`);
+});
+
+router.post("/statements", (req, res) => {
+  const query = readStatementQuery(req.body);
+  const back = (error) =>
+    res.redirect(`/admin/statements?${new URLSearchParams({ ...query, error })}#build`);
+  if (!query.client) return back("Choose the account client first.");
+  const wanted = new Set([].concat(req.body.docIds || []).map((v) => parseInt(v, 10)));
+  // Only invoices that are still eligible (unpaid, not on another statement, in range).
+  const docs = statementCandidates(query).invoices.filter((d) => wanted.has(d.id));
+  if (!docs.length) return back("Tick at least one invoice to put on the statement.");
+
+  const period_from = query.from || docs[0].service_date.slice(0, 10);
+  const id = db.transaction(() => {
+    const info = db
+      .prepare(
+        `INSERT INTO statements (number, client, client_email, client_address, branch, period_from, period_to,
+           issue_date, notes, prepared_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        nextStatementNumber(), query.client,
+        String(req.body.clientEmail || "").trim().slice(0, 200),
+        String(req.body.clientAddress || "").trim().slice(0, 500),
+        query.branch, period_from, query.to, todaySA(),
+        String(req.body.notes || "").trim().slice(0, 2000), req.session.staffId
+      );
+    const add = db.prepare("INSERT INTO statement_items (statement_id, document_id) VALUES (?, ?)");
+    for (const d of docs) {
+      syncDocsForStream(d.stream_id); // totals up to date with the funeral's gear
+      add.run(info.lastInsertRowid, d.id);
+    }
+    return info.lastInsertRowid;
+  })();
+  res.redirect(`/admin/statements/${id}`);
+});
+
+function loadStatement(req, res) {
+  const st = db.prepare("SELECT * FROM statements WHERE id = ?").get(parseInt(req.params.id, 10) || 0);
+  if (!st) res.status(404).send("Statement not found");
+  return st;
+}
+
+// Printable statement (Print → Save as PDF).
+router.get("/statements/:id(\\d+)", (req, res) => {
+  const st = loadStatement(req, res);
+  if (!st) return;
+  for (const it of statementItems(st.id)) if (!it.paid_at) syncDocsForStream(it.stream_id);
+  const items = statementItems(st.id);
+  const preparerRow = db.prepare("SELECT name, email FROM staff WHERE id = ?").get(st.prepared_by || req.session.staffId);
+  const preparer = preparerRow
+    ? { name: preparerRow.name, email: String(preparerRow.email || "").replace(/\.removed\.\d+$/, "") }
+    : null;
+  const { bank, from, s } = branchDetails(st.branch, preparer);
+  res.render("admin/statement-view", {
+    st, items, totals: statementTotals(items), bank, from, s, preparer,
+    dateOf: (sd) => (sd ? fmtYmd(String(sd).slice(0, 10)) : "—"),
+    ...helpers,
+  });
+});
+
+router.post("/statements/:id(\\d+)/:state(paid|unpaid)", (req, res) => {
+  const st = loadStatement(req, res);
+  if (!st) return;
+  const items = statementItems(st.id);
+  const today = todaySA();
+  db.transaction(() => {
+    if (req.params.state === "paid") {
+      for (const it of items) {
+        if (it.paid_at) continue; // already paid on its own
+        syncDocsForStream(it.stream_id); // freeze the invoice as it stands now
+        db.prepare("UPDATE documents SET paid_at = ? WHERE id = ?").run(today, it.id);
+        db.prepare("UPDATE statement_items SET paid_by_statement = 1 WHERE document_id = ?").run(it.id);
+      }
+      db.prepare("UPDATE statements SET paid_at = ? WHERE id = ?").run(today, st.id);
+    } else {
+      for (const it of items) {
+        if (!it.paid_by_statement) continue; // leave invoices that were paid separately
+        db.prepare("UPDATE documents SET paid_at = NULL WHERE id = ?").run(it.id);
+        db.prepare("UPDATE statement_items SET paid_by_statement = 0 WHERE document_id = ?").run(it.id);
+        syncDocsForStream(it.stream_id);
+      }
+      db.prepare("UPDATE statements SET paid_at = NULL WHERE id = ?").run(st.id);
+    }
+  })();
+  // Paid / unpaid shows on each billed person's CRM record.
+  crm.enqueue(items.flatMap((it) => billedEmails(it.stream_id)));
+  res.redirect(req.get("Referer") || `/admin/statements/${st.id}`);
+});
+
+router.post("/statements/:id(\\d+)/delete", (req, res) => {
+  const st = loadStatement(req, res);
+  if (!st) return;
+  if (st.paid_at) return res.redirect(`/admin/statements?error=${encodeURIComponent(`Mark ${st.number} as unpaid before deleting it.`)}`);
+  db.transaction(() => {
+    db.prepare("DELETE FROM statement_items WHERE statement_id = ?").run(st.id);
+    db.prepare("DELETE FROM statements WHERE id = ?").run(st.id);
+  })();
+  res.redirect("/admin/statements?notice=deleted");
+});
+
 // --------------------------------------------------------------- settings
 
 const SETTING_FIELDS = [
@@ -463,3 +753,4 @@ router.post("/settings", (req, res) => {
 module.exports = router;
 module.exports.syncDocsForStream = syncDocsForStream;
 module.exports.billedEmails = billedEmails;
+module.exports.accountClients = accountClients;

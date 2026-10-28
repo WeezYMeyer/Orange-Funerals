@@ -10,7 +10,7 @@
       <div class="error-box"><%= error %></div>
     <% } %>
     <form method="post" action="/admin/streams/new">
-      <%- include("../partials/stream-fields", { f: form, kits, sources }) %>
+      <%- include("../partials/stream-fields", { f: form, kits, sources, accounts }) %>
       <button class="btn" type="submit">Create Livestream</button>
     </form>
   </div>

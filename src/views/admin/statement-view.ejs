@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Statement <%= st.number %> · <%= st.client %></title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet" />
+  <style>
+    :root { --orange: #F05A22; --charcoal: #242524; --ink: #2b2b2b; --muted: #6f6f6f; --line: #e6e3de; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #eceae6; font-family: Roboto, Helvetica, Arial, sans-serif; color: var(--ink); }
+    .toolbar { max-width: 210mm; margin: 20px auto 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 0 16px; }
+    .toolbar a, .toolbar button { font: 500 14px Roboto, sans-serif; padding: 9px 16px; border-radius: 8px; border: 1px solid #cfcac2; background: #fff; color: var(--ink); text-decoration: none; cursor: pointer; }
+    .toolbar .primary { background: var(--orange); border-color: var(--orange); color: #fff; }
+    .toolbar .spacer { flex: 1; }
+    .toolbar .hint { font-size: 12px; color: var(--muted); width: 100%; }
+    .page { background: #fff; width: 210mm; min-height: 297mm; margin: 0 auto 40px; padding: 18mm 18mm 16mm; position: relative; box-shadow: 0 4px 20px rgba(0,0,0,.08); }
+    .band { position: absolute; top: 0; left: 0; right: 0; height: 6px; background: linear-gradient(90deg, var(--charcoal) 0 70%, var(--orange) 70%); }
+    header { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand img { width: 58px; height: 58px; }
+    .wordmark { line-height: 1; }
+    .wordmark .w1 { font-weight: 700; font-size: 26px; letter-spacing: .5px; color: var(--charcoal); }
+    .wordmark .w2 { font-weight: 300; font-size: 15px; letter-spacing: 3px; color: var(--charcoal); margin-top: 3px; }
+    .doc-title { text-align: right; }
+    .doc-title h1 { margin: 0; font-size: 30px; font-weight: 700; letter-spacing: 2px; color: var(--orange); text-transform: uppercase; }
+    .doc-title table { margin-left: auto; margin-top: 8px; font-size: 13px; border-collapse: collapse; }
+    .doc-title td { padding: 2px 0 2px 14px; }
+    .doc-title td:first-child { color: var(--muted); }
+    .parties { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin: 30px 0 22px; font-size: 13px; line-height: 1.55; }
+    .parties h3, .service h3 { margin: 0 0 6px; font-size: 11px; font-weight: 500; letter-spacing: 1.5px; text-transform: uppercase; color: var(--orange); }
+    .parties strong { font-size: 14px; }
+    .service { background: #f7f6f4; border-left: 3px solid var(--orange); padding: 12px 16px; font-size: 13px; line-height: 1.55; margin-bottom: 22px; }
+    table.items { width: 100%; border-collapse: collapse; font-size: 13px; }
+    table.items th { text-align: left; font-size: 11px; font-weight: 500; letter-spacing: 1px; text-transform: uppercase; color: #fff; background: var(--charcoal); padding: 9px 10px; }
+    table.items th.num, table.items td.num { text-align: right; white-space: nowrap; }
+    table.items td { padding: 11px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    table.items ul { margin: 6px 0 0; padding-left: 18px; color: #555; font-weight: 300; }
+    table.items li { margin: 2px 0; }
+    .totals { display: flex; justify-content: flex-end; margin-top: 4px; }
+    .totals table { font-size: 14px; border-collapse: collapse; min-width: 260px; }
+    .totals td { padding: 8px 10px; }
+    .totals .grand td { font-size: 18px; font-weight: 700; border-top: 2px solid var(--charcoal); }
+    .totals .grand td:last-child { color: var(--orange); }
+    .vat { text-align: right; font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .info { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 30px; font-size: 13px; line-height: 1.6; }
+    .info h3 { margin: 0 0 6px; font-size: 11px; font-weight: 500; letter-spacing: 1.5px; text-transform: uppercase; color: var(--orange); }
+    .info .missing { color: #b0412b; }
+    .notes { margin-top: 20px; font-size: 13px; white-space: pre-wrap; line-height: 1.55; }
+    footer { position: absolute; left: 18mm; right: 18mm; bottom: 12mm; border-top: 1px solid var(--line); padding-top: 8px; font-size: 11px; color: var(--muted); display: flex; justify-content: space-between; }
+    .stamp { position: absolute; top: 62mm; right: 22mm; transform: rotate(-12deg); border: 3px solid #2f9e5b; color: #2f9e5b; font-weight: 700; font-size: 26px; letter-spacing: 3px; padding: 4px 14px; border-radius: 6px; opacity: .85; }
+    .stamp small { display: block; font-size: 11px; letter-spacing: 1px; text-align: center; font-weight: 500; }
+    @media (max-width: 820px) {
+      .page { width: auto; min-height: 0; margin: 0 8px 30px; padding: 24px 16px 70px; }
+      header, .parties, .info { display: block; }
+      .doc-title { text-align: left; margin-top: 16px; } .doc-title table { margin-left: 0; }
+      .parties > div, .info > div { margin-bottom: 16px; }
+      footer { left: 16px; right: 16px; bottom: 16px; }
+    }
+    @media print {
+      @page { size: A4; margin: 0; }
+      body { background: #fff; }
+      .toolbar { display: none; }
+      .page { margin: 0; box-shadow: none; width: 210mm; min-height: 297mm; }
+      * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+      .period { color: var(--muted); font-size: 12px; }
+    table.items td.paid { color: #2f9e5b; font-weight: 500; }
+    .totals tr.sub td { color: var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <a href="/admin/statements">← Statements</a>
+    <form method="post" action="/admin/statements/<%= st.id %>/<%= st.paid_at ? 'unpaid' : 'paid' %>" style="margin:0"
+          onsubmit="return confirm('<%= st.paid_at ? 'Mark as unpaid? Invoices this statement marked paid go back to unpaid.' : 'Mark this statement and all its invoices as paid?' %>');">
+      <button type="submit"><%= st.paid_at ? "Mark as unpaid" : "Mark as paid" %></button>
+    </form>
+    <% if (!st.paid_at) { %>
+      <form method="post" action="/admin/statements/<%= st.id %>/delete" style="margin:0" onsubmit="return confirm('Delete <%= st.number %>? The invoices stay; they can go on a new statement.');">
+        <button type="submit">Delete</button>
+      </form>
+    <% } %>
+    <span class="spacer"></span>
+    <button class="primary" onclick="window.print()">Print / Save as PDF</button>
+    <span class="hint">In the print window choose <strong>Save as PDF</strong> and send it to <%= st.client %>. Attach the individual invoices if they ask for them.</span>
+  </div>
+
+  <div class="page">
+    <div class="band"></div>
+    <% if (st.paid_at) { %><div class="stamp">PAID<small><%= fmtYmd(st.paid_at) %></small></div><% } %>
+
+    <header>
+      <div class="brand">
+        <img src="/img/orange-productions-mark.png" alt="" />
+        <div class="wordmark"><div class="w1">ORANGE</div><div class="w2">PRODUCTIONS</div></div>
+      </div>
+      <div class="doc-title">
+        <h1>Statement</h1>
+        <table>
+          <tr><td>Statement no.</td><td><strong><%= st.number %></strong></td></tr>
+          <tr><td>Date</td><td><%= fmtYmd(st.issue_date) %></td></tr>
+          <tr><td>Period</td><td><%= fmtYmd(st.period_from) %> – <%= fmtYmd(st.period_to) %></td></tr>
+          <% if (preparer) { %><tr><td>Prepared by</td><td><%= preparer.name %></td></tr><% } %>
+        </table>
+      </div>
+    </header>
+
+    <div class="parties">
+      <div>
+        <h3>From</h3>
+        <strong><%= from.name %></strong><br/>
+        <% if (from.address) { %><%= from.address %><br/><% } %>
+        <% if (from.phone) { %><%= from.phone %><br/><% } %>
+        <% if (from.email) { %><%= from.email %><br/><% } %>
+        <% if (from.website) { %><%= from.website %><% } %>
+      </div>
+      <div>
+        <h3>Statement for</h3>
+        <strong><%= st.client %></strong><br/>
+        <% if (st.client_address) { %><%= st.client_address %><br/><% } %>
+        <% if (st.client_email) { %><%= st.client_email %><% } %>
+      </div>
+    </div>
+
+    <table class="items">
+      <thead><tr><th>Service date</th><th>Funeral livestream</th><th>Invoice</th><th class="num">Amount</th></tr></thead>
+      <tbody>
+        <% items.forEach(it => { %>
+          <tr>
+            <td style="white-space:nowrap"><%= dateOf(it.service_date) %></td>
+            <td><strong><%= it.title %></strong><% if (it.venue_name) { %><br/><span class="period"><%= it.venue_name %></span><% } %></td>
+            <td><%= it.number %><% if (it.paid_at && !it.paid_by_statement) { %><br/><span class="period">paid <%= fmtYmd(it.paid_at) %></span><% } %></td>
+            <td class="num"><%= fmtR(it.total_cents) %></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+
+    <div class="totals">
+      <table>
+        <% if (totals.paid && !st.paid_at) { %>
+          <tr class="sub"><td><%= items.length %> invoice<%= items.length === 1 ? "" : "s" %></td><td class="num" style="text-align:right"><%= fmtR(totals.total) %></td></tr>
+          <tr class="sub"><td>Already paid</td><td class="num" style="text-align:right">-<%= fmtR(totals.paid) %></td></tr>
+        <% } %>
+        <tr class="grand"><td><%= st.paid_at ? "Total paid" : "Amount due" %></td><td class="num" style="text-align:right"><%= fmtR(st.paid_at ? totals.total : totals.due) %></td></tr>
+      </table>
+    </div>
+    <% if (s.vat_note) { %><div class="vat"><%= s.vat_note %></div><% } %>
+
+    <div class="info">
+      <div>
+        <h3>Banking details</h3>
+        <% if (bank.number && bank.number.trim()) { %>
+          Account holder: <strong><%= bank.holder %></strong><br/>
+          <%= bank.name %><% if (bank.branchName) { %> · <%= bank.branchName %><% } %><br/>
+          Account no: <strong><%= bank.number %></strong><% if (bank.type) { %> (<%= bank.type %>)<% } %><br/>
+          <% if (bank.branchCode) { %>Branch code: <%= bank.branchCode %><br/><% } %>
+          <% if (bank.swift) { %>SWIFT: <%= bank.swift %><br/><% } %>
+          Reference: <strong><%= st.number %></strong>
+        <% } else { %>
+          <span class="missing">Add the <%= bank.label %> banking details under Business settings.</span>
+        <% } %>
+      </div>
+      <div>
+        <h3>Payment</h3>
+        Please pay the amount due in one payment, using <strong><%= st.number %></strong> as the reference. This statement covers the invoices listed above.
+      </div>
+    </div>
+
+    <% if (st.notes) { %><div class="notes"><%= st.notes %></div><% } %>
+
+    <footer>
+      <span>Thank you for your continued support.</span>
+      <span><%= from.name %></span>
+    </footer>
+  </div>
+</body>
+</html>

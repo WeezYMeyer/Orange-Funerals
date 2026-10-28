@@ -227,6 +227,9 @@ const scheduled = fmtScheduled(stream.service_date);
       <h2>Quote &amp; invoice</h2>
       <a href="/admin/finance">Finance</a>
     </div>
+    <% if (stream.account_client) { %>
+      <p class="help">Account client: <strong><%= stream.account_client %></strong> — billed on a statement. <a href="/admin/statements?client=<%= encodeURIComponent(stream.account_client) %>&branch=<%= stream.branch %>#build">Statements for <%= stream.account_client %> →</a></p>
+    <% } %>
     <div class="doc-cards">
       <% ["quote", "invoice"].forEach(kind => { const d = docs[kind]; const L = kind === "quote" ? "Quote" : "Invoice"; %>
         <div class="doc-card">
@@ -236,6 +239,9 @@ const scheduled = fmtScheduled(stream.service_date);
               <span class="sub"><%= d.number %></span>
               <% if (kind === "invoice") { %>
                 <span class="tag <%= d.paid_at ? 'crew-confirmed' : 'crew-asked' %>"><%= d.paid_at ? "Paid" : "Unpaid" %></span>
+              <% } %>
+              <% if (kind === "invoice" && statement) { %>
+                <a class="tag" href="/admin/statements/<%= statement.id %>">On statement <%= statement.number %></a>
               <% } %>
             <% } %>
           </div>

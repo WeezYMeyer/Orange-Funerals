@@ -247,6 +247,38 @@ db.exec(`
   ).run(defaults.ct_business_address, "8 Windell St, Durbanville, Cape Town, 7550");
 }
 
+// --- Statements for account clients such as AVBOB (added Oct 2026) ---
+// Each funeral still gets its own invoice; a statement groups a client's
+// unpaid invoices for a period so they can pay them in one go.
+{
+  const existing = new Set(db.prepare("PRAGMA table_info(streams)").all().map((c) => c.name));
+  if (!existing.has("account_client")) db.exec("ALTER TABLE streams ADD COLUMN account_client TEXT"); // e.g. "AVBOB"
+}
+db.exec(`
+  CREATE TABLE IF NOT EXISTS statements (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    number         TEXT NOT NULL UNIQUE,      -- ST0001
+    client         TEXT NOT NULL,             -- matches streams.account_client
+    client_email   TEXT,
+    client_address TEXT,
+    branch         TEXT NOT NULL DEFAULT 'pretoria',
+    period_from    TEXT NOT NULL,             -- YYYY-MM-DD (service dates)
+    period_to      TEXT NOT NULL,
+    issue_date     TEXT NOT NULL,
+    notes          TEXT,
+    paid_at        TEXT,
+    prepared_by    INTEGER REFERENCES staff(id),
+    created_at     TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  -- One row per invoice on a statement. An invoice is on one statement at most.
+  CREATE TABLE IF NOT EXISTS statement_items (
+    statement_id      INTEGER NOT NULL REFERENCES statements(id),
+    document_id       INTEGER NOT NULL UNIQUE REFERENCES documents(id),
+    paid_by_statement INTEGER NOT NULL DEFAULT 0  -- 1 = marked paid when the statement was paid
+  );
+  CREATE INDEX IF NOT EXISTS idx_statement_items_statement ON statement_items(statement_id);
+`);
+
 // --- Contacts waiting to be sent to the Orange Platform CRM (added Oct 2026) ---
 // One row per email with a change the platform hasn't received yet. See lib/crmSync.js.
 db.exec(`
