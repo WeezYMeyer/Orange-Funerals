@@ -784,3 +784,13 @@ td.overdue { color: var(--danger); font-weight: 600; }
 }
 .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .table-scroll table { min-width: 640px; }
+
+/* Funeral homes (Oct 2026) */
+.homes-layout { grid-template-columns: 400px 1fr; }
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.home-addr { white-space: pre-line; }
+.warn-text { color: #b0412b; }
+.stmt-to-card { background: var(--panel-soft, #f7f6f4); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; margin: 16px 0; font-size: 14px; line-height: 1.5; }
+.stmt-to-card .home-addr { color: var(--muted); margin: 4px 0 6px; }
+@media (max-width: 900px) { .homes-layout, .two-col { grid-template-columns: 1fr; } }
+.homes-layout > * { min-width: 0; }

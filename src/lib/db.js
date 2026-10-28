@@ -279,6 +279,35 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_statement_items_statement ON statement_items(statement_id);
 `);
 
+// --- Funeral homes (account clients) with their billing details (added Oct 2026) ---
+// Funerals link to a funeral home by name (streams.account_client); renaming a
+// funeral home updates its funerals and statements too (see routes/billing.js).
+db.exec(`
+  CREATE TABLE IF NOT EXISTS funeral_homes (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    name           TEXT NOT NULL UNIQUE COLLATE NOCASE,  -- e.g. "AVBOB Centurion"
+    contact_person TEXT,
+    phone          TEXT,
+    email          TEXT,                                 -- accounts / invoices email
+    address        TEXT,                                 -- billing address, several lines
+    vat_number     TEXT,
+    reg_number     TEXT,
+    notes          TEXT,                                 -- staff only
+    active         INTEGER NOT NULL DEFAULT 1,
+    created_at     TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+`);
+// Account clients typed in before this tab existed become funeral homes.
+db.prepare(
+  `INSERT OR IGNORE INTO funeral_homes (name, email, address)
+   SELECT trim(s.account_client),
+          (SELECT st.client_email FROM statements st WHERE lower(st.client) = lower(trim(s.account_client)) ORDER BY st.id DESC LIMIT 1),
+          (SELECT st.client_address FROM statements st WHERE lower(st.client) = lower(trim(s.account_client)) ORDER BY st.id DESC LIMIT 1)
+   FROM streams s WHERE s.account_client IS NOT NULL AND trim(s.account_client) != ''
+   GROUP BY lower(trim(s.account_client))`
+).run();
+db.prepare("INSERT OR IGNORE INTO funeral_homes (name, email, address) SELECT client, client_email, client_address FROM statements").run();
+
 // --- Contacts waiting to be sent to the Orange Platform CRM (added Oct 2026) ---
 // One row per email with a change the platform hasn't received yet. See lib/crmSync.js.
 db.exec(`

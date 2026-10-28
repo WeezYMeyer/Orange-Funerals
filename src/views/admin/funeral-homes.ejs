@@ -1,0 +1,98 @@
+<%
+const notices = { added: "Funeral home added.", updated: "Funeral home updated — its unpaid quotes, invoices and statements now show the new details.", removed: "Funeral home removed from the list. Past funerals, invoices and statements keep its name." };
+const f = form || {};
+%>
+<%- include("../partials/admin-head", { title: "Funeral homes" }) %>
+<%- include("../partials/admin-nav") %>
+
+<div class="container wide-cal">
+  <h1>Funeral homes</h1>
+  <p class="help">Funeral homes that give us funerals and pay on account (e.g. AVBOB). Load them once with their billing details; then pick them under <strong>Who do we bill?</strong> on a funeral. Their quotes and invoices are made out to them, and their funerals go on their <a href="/admin/statements">statements</a>. Families who book us directly are billed as before.</p>
+
+  <% if (notice && notices[notice]) { %><div class="notice-box"><%= notices[notice] %></div><% } %>
+
+  <div class="crew-layout homes-layout">
+    <div class="panel" id="form">
+      <h2 class="panel-title"><%= editing ? "Edit " + editing.name : "Add a funeral home" %></h2>
+      <% if (error) { %><div class="error-box"><%= error %></div><% } %>
+      <form method="post" action="<%= editing ? `/admin/funeral-homes/${editing.id}/edit` : '/admin/funeral-homes' %>">
+        <label for="name">Name (as it should appear on invoices)</label>
+        <input type="text" id="name" name="name" required placeholder="e.g. AVBOB Centurion" value="<%= f.name || '' %>" />
+
+        <label for="contactPerson">Contact person / accounts</label>
+        <input type="text" id="contactPerson" name="contactPerson" value="<%= f.contact_person || '' %>" />
+
+        <div class="two-col">
+          <div>
+            <label for="phone">Phone</label>
+            <input type="tel" id="phone" name="phone" value="<%= f.phone || '' %>" />
+          </div>
+          <div>
+            <label for="email">Accounts email</label>
+            <input type="email" id="email" name="email" placeholder="where invoices & statements go" value="<%= f.email || '' %>" />
+          </div>
+        </div>
+
+        <label for="address">Billing address</label>
+        <textarea id="address" name="address" class="short" placeholder="Street&#10;Suburb&#10;City, postal code"><%= f.address || '' %></textarea>
+
+        <div class="two-col">
+          <div>
+            <label for="vatNumber">VAT number <span class="legend-note">optional</span></label>
+            <input type="text" id="vatNumber" name="vatNumber" value="<%= f.vat_number || '' %>" />
+          </div>
+          <div>
+            <label for="regNumber">Company reg. number <span class="legend-note">optional</span></label>
+            <input type="text" id="regNumber" name="regNumber" value="<%= f.reg_number || '' %>" />
+          </div>
+        </div>
+
+        <label for="notes">Notes <span class="legend-note">staff only, not printed</span></label>
+        <input type="text" id="notes" name="notes" placeholder="e.g. needs order number on invoice, pays monthly" value="<%= f.notes || '' %>" />
+
+        <div style="margin-top:20px;">
+          <button class="btn" type="submit"><%= editing ? "Save" : "Add funeral home" %></button>
+          <% if (editing) { %><a class="btn secondary" href="/admin/funeral-homes">Cancel</a><% } %>
+        </div>
+      </form>
+    </div>
+
+    <div class="panel">
+      <h2 class="panel-title">Funeral homes (<%= homes.length %>)</h2>
+      <% if (homes.length === 0) { %>
+        <p class="help">None yet — add your first one on the left.</p>
+      <% } else { %>
+        <div class="table-scroll"><table>
+          <thead><tr><th>Name</th><th>Contact</th><th class="num">Funerals</th><th class="num">Unpaid</th><th></th></tr></thead>
+          <tbody>
+            <% homes.forEach(h => { %>
+              <tr>
+                <td>
+                  <strong><%= h.name %></strong>
+                  <% if (h.address) { %><div class="sub home-addr"><%= h.address %></div><% } %>
+                  <% if (!h.email || !h.address) { %><div class="sub warn-text">Missing <%= [!h.address && "address", !h.email && "email"].filter(Boolean).join(" & ") %></div><% } %>
+                </td>
+                <td>
+                  <%= h.contact_person || "" %>
+                  <% if (h.phone) { %><div class="sub"><%= h.phone %></div><% } %>
+                  <% if (h.email) { %><div class="sub"><%= h.email %></div><% } %>
+                </td>
+                <td class="num"><%= h.funerals %></td>
+                <td class="num"><%= h.unpaid ? fmtR(h.unpaid) : "—" %></td>
+                <td class="row-actions">
+                  <a href="/admin/statements?client=<%= encodeURIComponent(h.name) %>#build">Statement</a>
+                  <a href="/admin/funeral-homes?edit=<%= h.id %>#form">Edit</a>
+                  <form method="post" action="/admin/funeral-homes/<%= h.id %>/remove" onsubmit="return confirm('Remove <%= h.name.replace(/'/g, '') %> from the list?');">
+                    <button class="link-btn" type="submit">Remove</button>
+                  </form>
+                </td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table></div>
+      <% } %>
+    </div>
+  </div>
+</div>
+</body>
+</html>

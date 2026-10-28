@@ -7,6 +7,7 @@ const isCrew = path.startsWith("/crew");
 const isBroadcast = path === "/broadcast";
 const isFinance = path === "/finance";
 const isStatements = path.startsWith("/statements");
+const isHomes = path.startsWith("/funeral-homes");
 const isSettings = path === "/settings" || path === "/staff";
 %>
 <div class="topbar">
@@ -22,6 +23,7 @@ const isSettings = path === "/settings" || path === "/staff";
       <a href="/admin" class="<%= isStreams ? 'current' : '' %>">Streams</a>
       <a href="/admin/calendar" class="<%= isCalendar ? 'current' : '' %>">Calendar</a>
       <a href="/admin/crew" class="<%= isCrew ? 'current' : '' %>">Crew</a>
+      <a href="/admin/funeral-homes" class="<%= isHomes ? 'current' : '' %>">Funeral homes</a>
       <a href="/admin/finance" class="<%= isFinance ? 'current' : '' %>">Finance</a>
       <a href="/admin/statements" class="<%= isStatements ? 'current' : '' %>">Statements</a>
       <a href="/admin/streams/new" class="<%= isNew ? 'current' : '' %>">New Livestream</a>

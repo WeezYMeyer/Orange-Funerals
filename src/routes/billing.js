@@ -179,7 +179,7 @@ function draftFor(stream, kind) {
   const acct = stream.account_client ? accountDetails(stream.account_client) : null;
   const base = quote || {
     bill_to_name: acct ? acct.name : stream.contact_name || "",
-    bill_to_phone: acct ? "" : stream.contact_phone || "",
+    bill_to_phone: acct ? acct.phone : stream.contact_phone || "",
     bill_to_email: acct ? acct.email : "",
     bill_to_address: acct ? acct.address : "",
     package_label: s.package_label,
@@ -232,32 +232,56 @@ function readDocForm(body) {
   return { doc, error };
 }
 
-// Account clients used before (on funerals or statements), for suggestions.
-function accountClients() {
+// ----------------------------------------------------------- funeral homes
+// Funeral homes (account clients such as AVBOB) are billed instead of the family.
+// Funerals link to them by name (streams.account_client).
+
+function funeralHomes({ includeInactive = false } = {}) {
   return db
-    .prepare(
-      `SELECT account_client AS c FROM streams WHERE account_client IS NOT NULL AND account_client != ''
-       UNION SELECT client FROM statements ORDER BY 1 COLLATE NOCASE`
-    )
-    .all()
-    .map((r) => r.c);
+    .prepare(`SELECT * FROM funeral_homes ${includeInactive ? "" : "WHERE active = 1"} ORDER BY name COLLATE NOCASE`)
+    .all();
 }
-// The company's email/address as last used on a statement or invoice.
+function accountClients() {
+  return funeralHomes().map((h) => h.name);
+}
+function findHome(name) {
+  return name ? db.prepare("SELECT * FROM funeral_homes WHERE name = ? COLLATE NOCASE").get(String(name).trim()) : null;
+}
+// The address block printed under the funeral home's name on invoices/statements.
+function homeAddress(h) {
+  return [
+    h.address,
+    h.contact_person ? `Attn: ${h.contact_person}` : "",
+    h.vat_number ? `VAT no: ${h.vat_number}` : "",
+    h.reg_number ? `Reg no: ${h.reg_number}` : "",
+  ].map((l) => String(l || "").trim()).filter(Boolean).join("\n");
+}
+// Billing details for a funeral home (falls back to just the name).
 function accountDetails(client) {
-  const st = db
-    .prepare("SELECT client_email, client_address FROM statements WHERE lower(client) = lower(?) ORDER BY id DESC LIMIT 1")
-    .get(client);
-  const inv = db
-    .prepare(
-      `SELECT d.bill_to_email, d.bill_to_address FROM documents d JOIN streams s ON s.id = d.stream_id
-       WHERE lower(s.account_client) = lower(?) AND d.kind = 'invoice' ORDER BY d.id DESC LIMIT 1`
-    )
-    .get(client);
-  return {
-    name: client,
-    email: (st && st.client_email) || (inv && inv.bill_to_email) || "",
-    address: (st && st.client_address) || (inv && inv.bill_to_address) || "",
-  };
+  const h = findHome(client);
+  if (!h) return { name: client, email: "", phone: "", address: "" };
+  return { name: h.name, email: h.email || "", phone: h.phone || "", address: homeAddress(h) };
+}
+
+// Put the funeral home's current details on the unpaid quote/invoice of these
+// funerals (after the funeral home is edited, or a funeral is moved to it).
+function applyFuneralHome(streamIds) {
+  const emails = [];
+  const upd = db.prepare(
+    `UPDATE documents SET bill_to_name = ?, bill_to_phone = ?, bill_to_email = ?, bill_to_address = ?,
+       updated_at = datetime('now') WHERE id = ?`
+  );
+  for (const id of [].concat(streamIds)) {
+    const stream = db.prepare("SELECT id, account_client FROM streams WHERE id = ?").get(id);
+    if (!stream || !stream.account_client) continue;
+    const a = accountDetails(stream.account_client);
+    for (const d of db.prepare("SELECT * FROM documents WHERE stream_id = ?").all(id)) {
+      if (isFrozen(d)) continue;
+      emails.push(d.bill_to_email, a.email);
+      upd.run(a.name, a.phone, a.email, a.address, d.id);
+    }
+  }
+  crm.enqueue(emails); // billed email may have changed
 }
 
 // Letterhead + bank account for a branch (same rules as quotes/invoices).
@@ -487,6 +511,89 @@ router.get("/finance", (req, res) => {
   });
 });
 
+// Funeral homes tab: add / edit the companies we bill on account.
+function readHomeForm(body) {
+  const t = (v, n = 300) => String(v || "").trim().slice(0, n);
+  const f = {
+    name: t(body.name, 120), contact_person: t(body.contactPerson), phone: t(body.phone, 60), email: t(body.email, 200),
+    address: t(body.address, 600), vat_number: t(body.vatNumber, 40), reg_number: t(body.regNumber, 40), notes: t(body.notes, 1000),
+  };
+  let error = null;
+  if (!f.name) error = "Please enter the funeral home's name.";
+  else if (f.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email)) error = "That email address doesn't look right.";
+  return { f, error };
+}
+
+function renderHomes(res, { editing = null, form = null, error = null, notice = null } = {}) {
+  const homes = funeralHomes().map((h) => ({
+    ...h,
+    funerals: db.prepare("SELECT COUNT(*) AS n FROM streams WHERE account_client = ? COLLATE NOCASE").get(h.name).n,
+    unpaid: db
+      .prepare(
+        `SELECT COALESCE(SUM(d.total_cents), 0) AS c FROM documents d JOIN streams s ON s.id = d.stream_id
+         WHERE s.account_client = ? COLLATE NOCASE AND d.kind = 'invoice' AND d.paid_at IS NULL`
+      )
+      .get(h.name).c,
+  }));
+  res.render("admin/funeral-homes", { homes, editing, form: form || editing || {}, error, notice, fmtR });
+}
+
+router.get("/funeral-homes", (req, res) => {
+  const editing = req.query.edit ? db.prepare("SELECT * FROM funeral_homes WHERE id = ?").get(parseInt(req.query.edit, 10)) || null : null;
+  renderHomes(res, { editing, notice: req.query.notice || null });
+});
+
+router.post("/funeral-homes", (req, res) => {
+  const { f, error } = readHomeForm(req.body);
+  const clash = !error && findHome(f.name);
+  if (error || (clash && clash.active)) {
+    return renderHomes(res, { form: f, error: error || `${clash.name} is already on the list.` });
+  }
+  if (clash) {
+    // Removed earlier: bring it back with the new details.
+    db.prepare(
+      `UPDATE funeral_homes SET name = @name, contact_person = @contact_person, phone = @phone, email = @email,
+         address = @address, vat_number = @vat_number, reg_number = @reg_number, notes = @notes, active = 1 WHERE id = @id`
+    ).run({ ...f, id: clash.id });
+  } else {
+    const cols = Object.keys(f);
+    db.prepare(`INSERT INTO funeral_homes (${cols.join(", ")}) VALUES (${cols.map((c) => "@" + c).join(", ")})`).run(f);
+  }
+  // Funerals already typed with this name pick up the details.
+  applyFuneralHome(db.prepare("SELECT id FROM streams WHERE account_client = ? COLLATE NOCASE").all(f.name).map((r) => r.id));
+  res.redirect("/admin/funeral-homes?notice=added");
+});
+
+router.post("/funeral-homes/:id(\\d+)/edit", (req, res) => {
+  const home = db.prepare("SELECT * FROM funeral_homes WHERE id = ?").get(parseInt(req.params.id, 10));
+  if (!home) return res.status(404).send("Funeral home not found");
+  const { f, error } = readHomeForm(req.body);
+  const clash = !error && findHome(f.name);
+  if (error || (clash && clash.id !== home.id)) {
+    return renderHomes(res, { editing: home, form: { ...f, id: home.id }, error: error || `Another funeral home is already called ${f.name}.` });
+  }
+  db.transaction(() => {
+    db.prepare(
+      `UPDATE funeral_homes SET name = @name, contact_person = @contact_person, phone = @phone, email = @email,
+         address = @address, vat_number = @vat_number, reg_number = @reg_number, notes = @notes WHERE id = @id`
+    ).run({ ...f, id: home.id });
+    if (f.name !== home.name) {
+      // Renamed: keep its funerals, lead source and unpaid statements linked.
+      db.prepare("UPDATE streams SET account_client = ? WHERE account_client = ? COLLATE NOCASE").run(f.name, home.name);
+      db.prepare("UPDATE streams SET lead_source = ? WHERE lead_source = ? COLLATE NOCASE").run(f.name, home.name);
+      db.prepare("UPDATE statements SET client = ? WHERE client = ? COLLATE NOCASE AND paid_at IS NULL").run(f.name, home.name);
+    }
+  })();
+  applyFuneralHome(db.prepare("SELECT id FROM streams WHERE account_client = ? COLLATE NOCASE").all(f.name).map((r) => r.id));
+  res.redirect("/admin/funeral-homes?notice=updated");
+});
+
+// Hidden, not deleted: past funerals, invoices and statements keep the name.
+router.post("/funeral-homes/:id(\\d+)/remove", (req, res) => {
+  db.prepare("UPDATE funeral_homes SET active = 0 WHERE id = ?").run(parseInt(req.params.id, 10));
+  res.redirect("/admin/funeral-homes?notice=removed");
+});
+
 // -------------------------------------------------------------- statements
 // For account clients like AVBOB: every funeral keeps its own invoice, and a
 // statement lists the client's unpaid invoices for a period so they can pay
@@ -573,7 +680,7 @@ router.get("/statements", (req, res) => {
     .prepare("SELECT * FROM statements ORDER BY id DESC LIMIT 200")
     .all()
     .map((st) => ({ ...st, ...statementTotals(statementItems(st.id)), count: statementItems(st.id).length }));
-  const acct = query.client ? accountDetails(query.client) : null;
+  const acct = query.client ? findHome(query.client) : null;
   res.render("admin/statements", {
     query,
     accounts: accountClients(),
@@ -637,8 +744,8 @@ router.post("/statements", (req, res) => {
       )
       .run(
         nextStatementNumber(), query.client,
-        String(req.body.clientEmail || "").trim().slice(0, 200),
-        String(req.body.clientAddress || "").trim().slice(0, 500),
+        accountDetails(query.client).email,
+        accountDetails(query.client).address,
         query.branch, period_from, query.to, todaySA(),
         String(req.body.notes || "").trim().slice(0, 2000), req.session.staffId
       );
@@ -663,6 +770,12 @@ router.get("/statements/:id(\\d+)", (req, res) => {
   const st = loadStatement(req, res);
   if (!st) return;
   for (const it of statementItems(st.id)) if (!it.paid_at) syncDocsForStream(it.stream_id);
+  if (!st.paid_at && findHome(st.client)) {
+    // Unpaid statements always show the funeral home's current details.
+    const a = accountDetails(st.client);
+    db.prepare("UPDATE statements SET client = ?, client_email = ?, client_address = ? WHERE id = ?").run(a.name, a.email, a.address, st.id);
+    Object.assign(st, { client: a.name, client_email: a.email, client_address: a.address });
+  }
   const items = statementItems(st.id);
   const preparerRow = db.prepare("SELECT name, email FROM staff WHERE id = ?").get(st.prepared_by || req.session.staffId);
   const preparer = preparerRow
@@ -754,3 +867,5 @@ module.exports = router;
 module.exports.syncDocsForStream = syncDocsForStream;
 module.exports.billedEmails = billedEmails;
 module.exports.accountClients = accountClients;
+module.exports.applyFuneralHome = applyFuneralHome;
+module.exports.funeralHomes = funeralHomes;

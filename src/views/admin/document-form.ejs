@@ -35,7 +35,7 @@ const rands = (c) => (c / 100).toFixed(2);
           </div>
           <div>
             <label for="billToAddress">Address / company (optional)</label>
-            <input type="text" id="billToAddress" name="billToAddress" value="<%= doc.bill_to_address || '' %>" />
+            <textarea id="billToAddress" name="billToAddress" class="short" rows="3"><%= doc.bill_to_address || '' %></textarea>
           </div>
         </div>
       </fieldset>

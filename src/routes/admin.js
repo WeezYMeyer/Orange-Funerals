@@ -98,6 +98,8 @@ function readStreamForm(body) {
     chatEnabled: [].concat(body.chatEnabled || []).includes("1") ? 1 : 0,
     gear: readGear(body),
   };
+  // Funerals from a funeral home count under that funeral home in Finance's "came from".
+  if (f.accountClient && !f.leadSource) f.leadSource = f.accountClient;
   const missing = [];
   if (!f.title) missing.push("title");
   if (!f.serviceDate) missing.push("service date & time");
@@ -416,6 +418,10 @@ router.post("/streams/:slug/edit", (req, res) => {
   ).run(...streamFormValues(f), stream.id);
   broadcastChatState(req, stream.slug, f.chatEnabled);
   billing.syncDocsForStream(stream.id); // gear changes flow into the quote/invoice
+  // Moved to a funeral home: its unpaid quote/invoice is now billed to the funeral home.
+  if (f.accountClient && (f.accountClient || "").toLowerCase() !== (stream.account_client || "").toLowerCase()) {
+    billing.applyFuneralHome(stream.id);
+  }
 
   res.redirect(`/admin/streams/${stream.slug}?notice=updated`);
 });

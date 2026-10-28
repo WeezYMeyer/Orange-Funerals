@@ -111,12 +111,18 @@
   </datalist>
   <p class="help">Type a new source or pick one you've used before — the Finance tab totals income per source.</p>
 
-  <label for="accountClient">Account client <span class="legend-note">optional — pays on a statement</span></label>
-  <input type="text" id="accountClient" name="accountClient" list="accountClients" placeholder="e.g. AVBOB" value="<%= f.accountClient || '' %>" />
-  <datalist id="accountClients">
-    <% (typeof accounts !== "undefined" ? accounts : []).forEach(a => { %><option value="<%= a %>"></option><% }) %>
-  </datalist>
-  <p class="help">Fill this in when a company pays for several funerals together (e.g. AVBOB). The funeral still gets its own invoice, billed to this company, and appears on the company's statement under <a href="/admin/statements">Statements</a>. Leave empty for families who pay per invoice.</p>
+  <label for="accountClient">Who do we bill?</label>
+  <% const homeList = (typeof accounts !== "undefined" ? accounts : []).slice();
+     if (f.accountClient && !homeList.some(a => a.toLowerCase() === String(f.accountClient).toLowerCase())) homeList.push(f.accountClient); %>
+  <select id="accountClient" name="accountClient">
+    <option value="">The family directly (normal invoice)</option>
+    <% if (homeList.length) { %>
+      <optgroup label="Funeral home — billed on a statement">
+        <% homeList.forEach(a => { %><option value="<%= a %>" <%= String(f.accountClient || "").toLowerCase() === a.toLowerCase() ? "selected" : "" %>><%= a %></option><% }) %>
+      </optgroup>
+    <% } %>
+  </select>
+  <p class="help">Pick the funeral home when they gave us the funeral: the quote and invoice are made out to them with their details, and it goes on their <a href="/admin/statements">statement</a>. Not on the list? Add it under <a href="/admin/funeral-homes" target="_blank">Funeral homes</a> (opens in a new tab), or save the funeral now and pick the funeral home later under Edit.</p>
 
   <label for="crewNotes">Notes for the operator</label>
   <textarea id="crewNotes" name="crewNotes" class="short" placeholder="Parking, who to report to, dress code, camera position…"><%= f.crewNotes || '' %></textarea>

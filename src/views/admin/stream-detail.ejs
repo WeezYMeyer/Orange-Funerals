@@ -228,7 +228,7 @@ const scheduled = fmtScheduled(stream.service_date);
       <a href="/admin/finance">Finance</a>
     </div>
     <% if (stream.account_client) { %>
-      <p class="help">Account client: <strong><%= stream.account_client %></strong> — billed on a statement. <a href="/admin/statements?client=<%= encodeURIComponent(stream.account_client) %>&branch=<%= stream.branch %>#build">Statements for <%= stream.account_client %> →</a></p>
+      <p class="help">Billed to funeral home <strong><%= stream.account_client %></strong> on a statement. <a href="/admin/statements?client=<%= encodeURIComponent(stream.account_client) %>&branch=<%= stream.branch %>#build">Statements for <%= stream.account_client %> →</a></p>
     <% } %>
     <div class="doc-cards">
       <% ["quote", "invoice"].forEach(kind => { const d = docs[kind]; const L = kind === "quote" ? "Quote" : "Invoice"; %>

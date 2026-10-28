@@ -122,7 +122,7 @@ const rate = (doc.transport_rate_cents / 100).toFixed(2);
       <div>
         <h3><%= isQuote ? "Prepared for" : "Bill to" %></h3>
         <strong><%= doc.bill_to_name %></strong><br/>
-        <% if (doc.bill_to_address) { %><%= doc.bill_to_address %><br/><% } %>
+        <% if (doc.bill_to_address) { %><span style="white-space:pre-line"><%= doc.bill_to_address %></span><br/><% } %>
         <% if (doc.bill_to_phone) { %><%= doc.bill_to_phone %><br/><% } %>
         <% if (doc.bill_to_email) { %><%= doc.bill_to_email %><% } %>
       </div>
@@ -190,6 +190,8 @@ const rate = (doc.transport_rate_cents / 100).toFixed(2);
         <h3><%= isQuote ? "Acceptance" : "Payment terms" %></h3>
         <% if (isQuote) { %>
           To accept this quote, simply reply to confirm and we'll book your livestream.<% if (doc.due_date) { %> This quote is valid until <%= fmtYmd(doc.due_date) %>.<% } %>
+        <% } else if (stream.account_client) { %>
+          On account: this invoice is included on your statement. Please pay the statement total using the statement number as your reference.
         <% } else { %>
           <%= s.payment_terms %>
         <% } %>

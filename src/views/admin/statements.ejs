@@ -6,7 +6,7 @@
     <h1>Statements</h1>
     <div class="cal-nav"><a class="btn secondary small" href="/admin/finance">Finance</a></div>
   </div>
-  <p class="help">For companies like AVBOB that pay for several funerals at once. Each funeral keeps its own invoice; a statement lists the company's unpaid invoices for a period. When they pay, press <strong>Mark paid</strong> on the statement and every invoice on it is marked paid.</p>
+  <p class="help">For <a href="/admin/funeral-homes">funeral homes</a> like AVBOB that pay for several funerals at once. Each funeral keeps its own invoice; a statement lists the company's unpaid invoices for a period. When they pay, press <strong>Mark paid</strong> on the statement and every invoice on it is marked paid.</p>
 
   <% if (notice === "deleted") { %><div class="notice-box">Statement deleted. Its invoices are available for a new statement again.</div><% } %>
   <% if (notice === "invoices") { %><div class="notice-box">Invoices created. They're ticked below, ready for the statement.</div><% } %>
@@ -16,9 +16,11 @@
     <h2 class="panel-title">New statement</h2>
     <form method="get" action="/admin/statements#build" class="stmt-filter">
       <div>
-        <label for="client">Account client</label>
-        <input type="text" id="client" name="client" list="accountClients" required placeholder="e.g. AVBOB" value="<%= query.client %>" />
-        <datalist id="accountClients"><% accounts.forEach(a => { %><option value="<%= a %>"></option><% }) %></datalist>
+        <label for="client">Funeral home</label>
+        <select id="client" name="client" required>
+          <option value="">Choose…</option>
+          <% accounts.forEach(a => { %><option value="<%= a %>" <%= query.client.toLowerCase() === a.toLowerCase() ? "selected" : "" %>><%= a %></option><% }) %>
+        </select>
       </div>
       <div>
         <label for="branch">Branch</label>
@@ -37,7 +39,7 @@
       </div>
       <div class="stmt-filter-btn"><button class="btn" type="submit">Find invoices</button></div>
     </form>
-    <p class="help">Funerals belong to a client through the <strong>Account client</strong> field on the funeral. Leave "Services from" empty to include everything unpaid up to the end date. Invoices already on a statement are never listed twice.</p>
+    <p class="help">Funerals belong to a funeral home through <strong>Who do we bill?</strong> on the funeral. Leave "Services from" empty to include everything unpaid up to the end date. Invoices already on a statement are never listed twice.</p>
 
     <% if (candidates) { %>
       <% if (candidates.missing.length) { %>
@@ -78,15 +80,12 @@
             <tfoot><tr><td colspan="4"><strong>Statement total</strong></td><td class="num"><strong id="stmt-total"><%= fmtR(candidates.invoices.reduce((t, i) => t + i.total_cents, 0)) %></strong></td></tr></tfoot>
           </table></div>
 
-          <div class="stmt-to">
-            <div>
-              <label for="clientEmail"><%= query.client %> accounts email <span class="legend-note">optional, shown on the statement</span></label>
-              <input type="email" id="clientEmail" name="clientEmail" value="<%= acct ? acct.email : '' %>" />
-            </div>
-            <div>
-              <label for="clientAddress">Address / reference <span class="legend-note">optional</span></label>
-              <input type="text" id="clientAddress" name="clientAddress" value="<%= acct ? acct.address : '' %>" />
-            </div>
+          <div class="stmt-to-card">
+            <strong>Statement for <%= query.client %></strong>
+            <% if (acct) { %>
+              <div class="home-addr"><%= [acct.address, acct.contact_person && "Attn: " + acct.contact_person, acct.email, acct.vat_number && "VAT no: " + acct.vat_number].filter(Boolean).join("\n") || "No billing details yet." %></div>
+              <a href="/admin/funeral-homes?edit=<%= acct.id %>#form">Edit <%= acct.name %>'s details</a>
+            <% } %>
           </div>
           <label for="notes">Note on the statement <span class="legend-note">optional</span></label>
           <textarea id="notes" name="notes" class="short" placeholder="e.g. Branch manager / order numbers"></textarea>
