@@ -47,7 +47,27 @@ const scheduled = fmtScheduled(stream.service_date);
     <div class="notice-box"><%= noticeHtml %></div>
   <% } %>
 
+  <%
+    const invoiceDoc = docs.invoice, quoteDoc = docs.quote;
+    const confirmed = assignments.filter(a => a.status === "confirmed");
+    const tabList = [
+      ["link", "Link", stream.ended_at ? "Ended" : "Live"],
+      ["details", "Funeral details", ""],
+      ["crew", "Camera operator", confirmed.length ? "✓" : (assignments.some(a => a.status === "asked") ? "asked" : "")],
+      ["finance", "Finance", invoiceDoc ? (invoiceDoc.paid_at ? "Paid" : "Unpaid") : (quoteDoc ? "Quoted" : "")],
+      ["chat", "Live chat", String(chatMessages.length)],
+      ["emails", "Emails", status === "sent" ? "✓ sent" : String(viewers.length)],
+    ];
+  %>
+  <nav class="stream-tabs" role="tablist">
+    <% tabList.forEach(([key, label, badge]) => { %>
+      <a href="#<%= key %>" class="stream-tab" data-tab="<%= key %>" role="tab"><%= label %><% if (badge) { %> <span class="tab-badge"><%= badge %></span><% } %></a>
+    <% }) %>
+  </nav>
+
+  <section class="tab-pane" data-pane="link">
   <div class="panel">
+    <h2 class="panel-title">Livestream link</h2>
     <label style="margin-top:0;">Public link — send this to family or post it wherever people will find it</label>
     <div class="link-box"><a href="<%= publicUrl %>" target="_blank"><%= publicUrl %></a></div>
 
@@ -56,67 +76,23 @@ const scheduled = fmtScheduled(stream.service_date);
       <p><span class="tag ended">Ended <%= new Date(stream.ended_at + "Z").toLocaleString() %></span></p>
     <% } else { %>
       <p><span class="tag live">Live / Open</span></p>
-      <form method="post" action="/admin/streams/<%= stream.slug %>/end" onsubmit="return confirm('End this stream? No emails are sent yet — you add the recording and send the thank-you emails next.');">
+      <form method="post" action="/admin/streams/<%= stream.slug %>/end" onsubmit="return confirm('End this stream? No emails are sent yet — you add the recording and send the thank-you emails on the Emails tab.');">
         <button class="btn danger" type="submit">End Stream</button>
       </form>
-      <p class="help">After the service: end the stream, add YoloLive's recording embed code, then send the thank-you emails.</p>
+      <p class="help">After the service: end the stream, then on the <strong>Emails</strong> tab add YoloLive's recording embed code and send the thank-you emails.</p>
     <% } %>
   </div>
 
-  <% if (stream.ended_at) { const hasRec = stream.recording_embed && stream.recording_embed.trim(); %>
-  <div class="panel" id="after">
-    <h2 class="panel-title">After the service</h2>
-
-    <div class="step <%= hasRec ? 'done' : '' %>">
-      <div class="step-num"><%= hasRec ? "✓" : "1" %></div>
-      <div class="step-body">
-        <strong>Recording embed code</strong>
-        <p class="help" style="margin-top:2px;">Paste the embed code YoloLive gives for the <em>recording</em>. The watch link stays the same — it just plays the recording from then on.</p>
-        <form method="post" action="/admin/streams/<%= stream.slug %>/recording">
-          <textarea name="recordingEmbed" class="short" placeholder="<iframe src=&quot;https://...&quot; ...></iframe>"><%= stream.recording_embed || "" %></textarea>
-          <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
-            <button class="btn small" type="submit"><%= hasRec ? "Update recording" : "Save recording" %></button>
-            <a class="btn small secondary" href="<%= publicUrl %>" target="_blank">Check the watch page</a>
-          </div>
-        </form>
-        <p class="help"><%= hasRec ? "Watch page is showing the recording." : "Until you add it, the watch page keeps the live embed code." %></p>
-      </div>
-    </div>
-
-    <div class="step <%= status === 'sent' ? 'done' : '' %>">
-      <div class="step-num"><%= status === "sent" ? "✓" : "2" %></div>
-      <div class="step-body">
-        <strong>Thank-you emails</strong>
-        <p style="margin:6px 0;">
-          <% if (status === "sent") { %>
-            <span class="tag email-sent">Sent to everyone who watched</span>
-          <% } else if (status === "no-viewers") { %>
-            <span class="tag">No viewers to email</span>
-          <% } else if (status === "partial") { %>
-            <span class="tag email-partial">Partially sent</span>
-          <% } else if (status === "failed") { %>
-            <span class="tag email-failed">Sending failed</span>
-          <% } else { %>
-            <span class="tag">Not sent yet</span>
-          <% } %>
-        </p>
-        <% if (status === "pending") { %>
-          <form method="post" action="/admin/streams/<%= stream.slug %>/send-thanks"
-                onsubmit="return confirm('<%= hasRec ? "Send the thank-you email to everyone who watched?" : "You have NOT added the recording yet — the link in the email will show the live embed. Send anyway?" %>');">
-            <button class="btn <%= hasRec ? '' : 'secondary' %>" type="submit">Send thank-you emails (<%= viewers.length %>)</button>
-          </form>
-          <% if (!hasRec) { %><p class="help warn-inline">Add the recording first so the link in the email plays it.</p><% } %>
-        <% } else if (status === "partial" || status === "failed") { %>
-          <form method="post" action="/admin/streams/<%= stream.slug %>/resend-thanks">
-            <button class="btn secondary" type="submit">Retry Sending</button>
-          </form>
-          <p class="help">Only retries people who haven't received it yet — safe to click again.</p>
-        <% } %>
-      </div>
-    </div>
+  <div class="panel">
+    <h2 style="margin-top:0; font-size:18px;">Delete this stream</h2>
+    <p class="help">Permanently removes the page, its link, the viewer list, and the chat history. This can't be undone — do this only if the stream was created by mistake or is no longer needed.</p>
+    <form method="post" action="/admin/streams/<%= stream.slug %>/delete" onsubmit="return confirm('Permanently delete &quot;<%= stream.title.replace(/&quot;/g, '') %>&quot;? This cannot be undone.');">
+      <button class="btn danger" type="submit">Delete Stream</button>
+    </form>
   </div>
-  <% } %>
+  </section>
 
+  <section class="tab-pane" data-pane="details">
   <div class="panel">
     <div class="panel-head">
       <h2>Funeral details</h2>
@@ -157,6 +133,9 @@ const scheduled = fmtScheduled(stream.service_date);
     <% } %>
   </div>
 
+  </section>
+
+  <section class="tab-pane" data-pane="crew">
   <div class="panel" id="crew">
     <div class="panel-head">
       <h2>Camera operators</h2>
@@ -226,6 +205,9 @@ const scheduled = fmtScheduled(stream.service_date);
     <% } %>
   </div>
 
+  </section>
+
+  <section class="tab-pane" data-pane="finance">
   <div class="panel" id="billing">
     <div class="panel-head">
       <h2>Quote &amp; invoice</h2>
@@ -274,6 +256,9 @@ const scheduled = fmtScheduled(stream.service_date);
     </div>
   </div>
 
+  </section>
+
+  <section class="tab-pane" data-pane="chat">
   <div class="panel" id="chat">
     <div class="panel-head">
       <h2>Live chat</h2>
@@ -305,6 +290,69 @@ const scheduled = fmtScheduled(stream.service_date);
     <% } %>
   </div>
 
+  </section>
+
+  <section class="tab-pane" data-pane="emails">
+  <% if (!stream.ended_at) { %>
+  <div class="panel">
+    <h2 class="panel-title">Thank-you emails</h2>
+    <p class="help">Available after the service: press <strong>End Stream</strong> on the Link tab, add YoloLive's recording embed code here, then send the thank-you emails to everyone below.</p>
+  </div>
+  <% } %>
+  <% if (stream.ended_at) { const hasRec = stream.recording_embed && stream.recording_embed.trim(); %>
+  <div class="panel" id="after">
+    <h2 class="panel-title">After the service</h2>
+
+    <div class="step <%= hasRec ? 'done' : '' %>">
+      <div class="step-num"><%= hasRec ? "✓" : "1" %></div>
+      <div class="step-body">
+        <strong>Recording embed code</strong>
+        <p class="help" style="margin-top:2px;">Paste the embed code YoloLive gives for the <em>recording</em>. The watch link stays the same — it just plays the recording from then on.</p>
+        <form method="post" action="/admin/streams/<%= stream.slug %>/recording">
+          <textarea name="recordingEmbed" class="short" placeholder="<iframe src=&quot;https://...&quot; ...></iframe>"><%= stream.recording_embed || "" %></textarea>
+          <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
+            <button class="btn small" type="submit"><%= hasRec ? "Update recording" : "Save recording" %></button>
+            <a class="btn small secondary" href="<%= publicUrl %>" target="_blank">Check the watch page</a>
+          </div>
+        </form>
+        <p class="help"><%= hasRec ? "Watch page is showing the recording." : "Until you add it, the watch page keeps the live embed code." %></p>
+      </div>
+    </div>
+
+    <div class="step <%= status === 'sent' ? 'done' : '' %>">
+      <div class="step-num"><%= status === "sent" ? "✓" : "2" %></div>
+      <div class="step-body">
+        <strong>Thank-you emails</strong>
+        <p style="margin:6px 0;">
+          <% if (status === "sent") { %>
+            <span class="tag email-sent">Sent to everyone who watched</span>
+          <% } else if (status === "no-viewers") { %>
+            <span class="tag">No viewers to email</span>
+          <% } else if (status === "partial") { %>
+            <span class="tag email-partial">Partially sent</span>
+          <% } else if (status === "failed") { %>
+            <span class="tag email-failed">Sending failed</span>
+          <% } else { %>
+            <span class="tag">Not sent yet</span>
+          <% } %>
+        </p>
+        <% if (status === "pending") { %>
+          <form method="post" action="/admin/streams/<%= stream.slug %>/send-thanks"
+                onsubmit="return confirm('<%= hasRec ? "Send the thank-you email to everyone who watched?" : "You have NOT added the recording yet — the link in the email will show the live embed. Send anyway?" %>');">
+            <button class="btn <%= hasRec ? '' : 'secondary' %>" type="submit">Send thank-you emails (<%= viewers.length %>)</button>
+          </form>
+          <% if (!hasRec) { %><p class="help warn-inline">Add the recording first so the link in the email plays it.</p><% } %>
+        <% } else if (status === "partial" || status === "failed") { %>
+          <form method="post" action="/admin/streams/<%= stream.slug %>/resend-thanks">
+            <button class="btn secondary" type="submit">Retry Sending</button>
+          </form>
+          <p class="help">Only retries people who haven't received it yet — safe to click again.</p>
+        <% } %>
+      </div>
+    </div>
+  </div>
+  <% } %>
+
   <div class="panel">
     <h2 style="margin-top:0; font-size:18px;">Viewers who entered their email (<%= viewers.length %>)</h2>
     <% if (viewers.length === 0) { %>
@@ -325,14 +373,42 @@ const scheduled = fmtScheduled(stream.service_date);
     <% } %>
   </div>
 
-  <div class="panel">
-    <h2 style="margin-top:0; font-size:18px;">Delete this stream</h2>
-    <p class="help">Permanently removes the page, its link, the viewer list, and the chat history. This can't be undone — do this only if the stream was created by mistake or is no longer needed.</p>
-    <form method="post" action="/admin/streams/<%= stream.slug %>/delete" onsubmit="return confirm('Permanently delete &quot;<%= stream.title.replace(/&quot;/g, '') %>&quot;? This cannot be undone.');">
-      <button class="btn danger" type="submit">Delete Stream</button>
-    </form>
-  </div>
+  </section>
+
 </div>
+
+<script>
+  // Tabs: the address bar remembers the tab (#finance etc.), and after a button
+  // reloads the page you land back on the tab you were using.
+  (function () {
+    const key = "streamTab:" + location.pathname;
+    const alias = { after: "emails", billing: "finance", crew: "crew", chat: "chat" };
+    const tabs = document.querySelectorAll(".stream-tab");
+    const panes = document.querySelectorAll(".tab-pane");
+    const valid = (t) => Array.from(tabs).some((a) => a.dataset.tab === t);
+    function show(t, push) {
+      if (!valid(t)) t = "link";
+      tabs.forEach((a) => a.classList.toggle("active", a.dataset.tab === t));
+      // On a phone, slide the tab bar so the chosen tab is visible.
+      const act = document.querySelector('.stream-tab[data-tab="' + t + '"]');
+      if (act) act.parentElement.scrollLeft = Math.max(0, act.offsetLeft - act.parentElement.offsetLeft - 16);
+      panes.forEach((p) => (p.hidden = p.dataset.pane !== t));
+      try { sessionStorage.setItem(key, t); } catch (e) {}
+      if (push) history.replaceState(null, "", "#" + t);
+    }
+    function fromHash() {
+      const h = location.hash.slice(1);
+      return alias[h] || h;
+    }
+    let start = fromHash();
+    if (!valid(start)) { try { start = sessionStorage.getItem(key) || "link"; } catch (e) { start = "link"; } }
+    show(start, false);
+    // Keep the tabs in view instead of jumping to a section further down.
+    window.addEventListener("load", () => setTimeout(() => window.scrollTo(0, 0), 0));
+    tabs.forEach((a) => a.addEventListener("click", (e) => { e.preventDefault(); show(a.dataset.tab, true); }));
+    window.addEventListener("hashchange", () => show(fromHash(), false));
+  })();
+</script>
 
 <script>
   // WhatsApp buttons: open WhatsApp with the message typed, record the
