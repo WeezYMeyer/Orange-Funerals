@@ -15,6 +15,10 @@
     .toolbar a, .toolbar button { font: 500 14px Roboto, sans-serif; padding: 9px 16px; border-radius: 8px; border: 1px solid #cfcac2; background: #fff; color: var(--ink); text-decoration: none; cursor: pointer; }
     .toolbar .primary { background: var(--orange); border-color: var(--orange); color: #fff; }
     .toolbar .spacer { flex: 1; }
+    .toolbar .paid-form { display: flex; gap: 6px; align-items: center; margin: 0; }
+    .toolbar input[type=date] { font: 14px Roboto, sans-serif; padding: 8px 10px; border: 1px solid #cfcac2; border-radius: 8px; background: #fff; }
+    .toolbar .link-btn { border: none; background: none; text-decoration: underline; color: var(--muted); padding: 9px 4px; }
+    .paid-on { color: #2f9e5b !important; }
     .toolbar .hint { font-size: 12px; color: var(--muted); width: 100%; }
     .page { background: #fff; width: 210mm; min-height: 297mm; margin: 0 auto 40px; padding: 18mm 18mm 16mm; position: relative; box-shadow: 0 4px 20px rgba(0,0,0,.08); }
     .band { position: absolute; top: 0; left: 0; right: 0; height: 6px; background: linear-gradient(90deg, var(--charcoal) 0 70%, var(--orange) 70%); }
@@ -50,7 +54,7 @@
     .info .missing { color: #b0412b; }
     .notes { margin-top: 20px; font-size: 13px; white-space: pre-wrap; line-height: 1.55; }
     footer { position: absolute; left: 18mm; right: 18mm; bottom: 12mm; border-top: 1px solid var(--line); padding-top: 8px; font-size: 11px; color: var(--muted); display: flex; justify-content: space-between; }
-    .stamp { position: absolute; top: 62mm; right: 22mm; transform: rotate(-12deg); border: 3px solid #2f9e5b; color: #2f9e5b; font-weight: 700; font-size: 26px; letter-spacing: 3px; padding: 4px 14px; border-radius: 6px; opacity: .85; }
+    .stamp { position: static; align-self: center; margin: 10px auto 0 20px; transform: rotate(-8deg); border: 3px solid #2f9e5b; color: #2f9e5b; font-weight: 700; font-size: 26px; letter-spacing: 3px; padding: 4px 14px; border-radius: 6px; opacity: .85; }
     .stamp small { display: block; font-size: 11px; letter-spacing: 1px; text-align: center; font-weight: 500; }
     @media (max-width: 820px) {
       .page { width: auto; min-height: 0; margin: 0 8px 30px; padding: 24px 16px 70px; }
@@ -74,10 +78,7 @@
 <body>
   <div class="toolbar">
     <a href="/admin/statements">← Statements</a>
-    <form method="post" action="/admin/statements/<%= st.id %>/<%= st.paid_at ? 'unpaid' : 'paid' %>" style="margin:0"
-          onsubmit="return confirm('<%= st.paid_at ? 'Mark as unpaid? Invoices this statement marked paid go back to unpaid.' : 'Mark this statement and all its invoices as paid?' %>');">
-      <button type="submit"><%= st.paid_at ? "Mark as unpaid" : "Mark as paid" %></button>
-    </form>
+    <%- include("../partials/paid-form", { base: `/admin/statements/${st.id}`, paidAt: st.paid_at, what: "statement", label: "Mark as paid" }) %>
     <% if (!st.paid_at) { %>
       <form method="post" action="/admin/statements/<%= st.id %>/delete" style="margin:0" onsubmit="return confirm('Delete <%= st.number %>? The invoices stay; they can go on a new statement.');">
         <button type="submit">Delete</button>
@@ -90,7 +91,6 @@
 
   <div class="page">
     <div class="band"></div>
-    <% if (st.paid_at) { %><div class="stamp">PAID<small><%= fmtYmd(st.paid_at) %></small></div><% } %>
 
     <header>
       <div class="brand">
@@ -102,6 +102,7 @@
         <table>
           <tr><td>Statement no.</td><td><strong><%= st.number %></strong></td></tr>
           <tr><td>Date</td><td><%= fmtYmd(st.issue_date) %></td></tr>
+          <% if (st.paid_at) { %><tr><td>Paid on</td><td><strong><%= fmtYmd(st.paid_at) %></strong></td></tr><% } %>
           <tr><td>Period</td><td><%= fmtYmd(st.period_from) %> – <%= fmtYmd(st.period_to) %></td></tr>
           <% if (supplier) { %><tr><td>Supplier no.</td><td><strong><%= supplier %></strong></td></tr><% } %>
           <% if (preparer) { %><tr><td>Prepared by</td><td><%= preparer.name %></td></tr><% } %>
@@ -138,7 +139,7 @@
               <% if (it.venue_name) { %><br/><span class="period"><%= it.venue_name %></span><% } %>
             </td>
             <td style="white-space:nowrap"><%= it.bb_number || "—" %></td>
-            <td><%= it.number %><% if (it.paid_at && !it.paid_by_statement) { %><br/><span class="period">paid <%= fmtYmd(it.paid_at) %></span><% } %></td>
+            <td><%= it.number %><% if (it.paid_at) { %><br/><span class="period paid-on">Paid <%= fmtYmd(it.paid_at) %></span><% } %></td>
             <td class="num"><%= fmtR(it.total_cents) %></td>
           </tr>
         <% }) %>
@@ -146,6 +147,7 @@
     </table>
 
     <div class="totals">
+      <% if (st.paid_at) { %><div class="stamp">PAID<small><%= fmtYmd(st.paid_at) %></small></div><% } %>
       <table>
         <% if (totals.paid && !st.paid_at) { %>
           <tr class="sub"><td><%= items.length %> invoice<%= items.length === 1 ? "" : "s" %></td><td class="num" style="text-align:right"><%= fmtR(totals.total) %></td></tr>

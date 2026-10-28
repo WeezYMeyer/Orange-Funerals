@@ -1,0 +1,27 @@
+<%#
+  "Mark paid" with the date the money came in. Expects:
+    base      e.g. /admin/streams/<slug>/invoice  or  /admin/statements/<id>
+    paidAt    current paid date (YYYY-MM-DD) or null
+    what      "invoice" | "statement"  (for the confirm messages)
+    label     optional button text
+%>
+<%
+  const todayYmd = new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Johannesburg" });
+  const isStmt = typeof what !== "undefined" && what === "statement";
+%>
+<% if (!paidAt) { %>
+  <form method="post" action="<%= base %>/paid" class="paid-form"
+        <% if (isStmt) { %>onsubmit="return confirm('Mark this statement and all its invoices as paid on ' + this.paidDate.value + '?');"<% } %>>
+    <input type="date" name="paidDate" value="<%= todayYmd %>" max="<%= todayYmd %>" required title="Date the payment came in" aria-label="Date paid" />
+    <button class="btn small" type="submit"><%= typeof label !== "undefined" && label ? label : "Mark paid" %></button>
+  </form>
+<% } else { %>
+  <form method="post" action="<%= base %>/paid" class="paid-form">
+    <input type="date" name="paidDate" value="<%= paidAt %>" max="<%= todayYmd %>" required title="Date the payment came in" aria-label="Date paid" />
+    <button class="btn small secondary" type="submit">Change date</button>
+  </form>
+  <form method="post" action="<%= base %>/unpaid" class="paid-form"
+        onsubmit="return confirm('<%= isStmt ? "Mark as unpaid? Invoices this statement marked paid go back to unpaid." : "Mark this invoice as unpaid?" %>');">
+    <button class="link-btn" type="submit">Mark unpaid</button>
+  </form>
+<% } %>

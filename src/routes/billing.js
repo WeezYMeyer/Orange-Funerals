@@ -39,6 +39,12 @@ function fmtR(cents) {
 function todaySA() {
   return new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Johannesburg" });
 }
+// The payment date typed in when marking paid (today if missing, never in the future).
+function paidDateFrom(body) {
+  const d = String((body && body.paidDate) || "");
+  const today = todaySA();
+  return /^\d{4}-\d{2}-\d{2}$/.test(d) && d <= today ? d : today;
+}
 function addDays(ymd, days) {
   const d = new Date(ymd + "T00:00:00Z");
   d.setUTCDate(d.getUTCDate() + (parseInt(days, 10) || 0));
@@ -451,10 +457,12 @@ router.get(`/streams/:slug/${KIND}`, (req, res) => {
 router.post("/streams/:slug/invoice/:state(paid|unpaid)", (req, res) => {
   const stream = loadStream(req, res);
   if (!stream) return;
+  const inv = loadDoc(stream, "invoice");
   // Bring the invoice up to date with the funeral before it is frozen (or after unfreezing).
-  if (req.params.state === "paid") syncDocsForStream(stream.id);
+  // Already paid? Then this only changes the payment date.
+  if (req.params.state === "paid" && inv && !inv.paid_at) syncDocsForStream(stream.id);
   db.prepare("UPDATE documents SET paid_at = ? WHERE stream_id = ? AND kind = 'invoice'").run(
-    req.params.state === "paid" ? todaySA() : null,
+    req.params.state === "paid" ? paidDateFrom(req.body) : null,
     stream.id
   );
   if (req.params.state === "unpaid") syncDocsForStream(stream.id);
@@ -860,10 +868,15 @@ router.post("/statements/:id(\\d+)/:state(paid|unpaid)", (req, res) => {
   const st = loadStatement(req, res);
   if (!st) return;
   const items = statementItems(st.id);
-  const today = todaySA();
+  const today = paidDateFrom(req.body);
   db.transaction(() => {
     if (req.params.state === "paid") {
       for (const it of items) {
+        if (it.paid_at && it.paid_by_statement) {
+          // Statement already paid: just move its invoices to the new payment date.
+          db.prepare("UPDATE documents SET paid_at = ? WHERE id = ?").run(today, it.id);
+          continue;
+        }
         if (it.paid_at) continue; // already paid on its own
         syncDocsForStream(it.stream_id); // freeze the invoice as it stands now
         db.prepare("UPDATE documents SET paid_at = ? WHERE id = ?").run(today, it.id);

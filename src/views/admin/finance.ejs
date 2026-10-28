@@ -39,7 +39,7 @@
               <td><% if (r.i_number) { %><a href="/admin/streams/<%= r.slug %>/invoice"><%= r.i_number %></a><% } else { %>—<% } %></td>
               <td class="num"><%= r.i_number ? fmtR(r.i_total) : (r.q_number ? fmtR(r.q_total) : "—") %></td>
               <td>
-                <% if (r.i_number && r.paid_at) { %><span class="tag crew-confirmed">Paid</span>
+                <% if (r.i_number && r.paid_at) { %><span class="tag crew-confirmed">Paid <%= fmtYmd(r.paid_at) %></span>
                 <% } else if (r.i_number) { %><span class="tag crew-asked">Unpaid</span>
                 <% } else if (r.q_number) { %><span class="tag">Quoted</span>
                 <% } else { %><span class="tag crew-none">No quote</span><% } %>
@@ -83,9 +83,7 @@
                 <td class="<%= u.due_date && u.due_date < today ? 'overdue' : '' %>"><%= fmtYmd(u.due_date) %></td>
                 <td class="num"><%= fmtR(u.total_cents) %></td>
                 <td>
-                  <form method="post" action="/admin/streams/<%= u.slug %>/invoice/paid" style="margin:0">
-                    <button class="link-btn" type="submit">Mark paid</button>
-                  </form>
+                  <%- include("../partials/paid-form", { base: `/admin/streams/${u.slug}/invoice`, paidAt: null, what: "invoice" }) %>
                 </td>
               </tr>
             <% }) %>

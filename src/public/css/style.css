@@ -811,3 +811,7 @@ td.overdue { color: var(--danger); font-weight: 600; }
 .tab-badge { display: inline-block; margin-left: 4px; padding: 1px 7px; border-radius: 999px; background: var(--line-soft, #efece7); color: var(--muted); font-size: 11.5px; font-weight: 600; }
 .stream-tab.active .tab-badge { background: var(--accent); color: #fff; }
 .tab-pane[hidden] { display: none !important; }
+
+/* Mark paid with a payment date (Oct 2026) */
+.paid-form { display: inline-flex; gap: 6px; align-items: center; margin: 0; flex-wrap: wrap; }
+.paid-form input[type=date] { width: auto; margin: 0; padding: 6px 8px; font-size: 13px; }

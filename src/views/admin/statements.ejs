@@ -123,12 +123,9 @@
               <td class="num"><%= st.count %></td>
               <td class="num"><%= fmtR(st.total) %></td>
               <td class="num"><%= fmtR(st.due) %></td>
-              <td><% if (st.paid_at) { %><span class="tag crew-confirmed">Paid</span><% } else { %><span class="tag crew-asked">Unpaid</span><% } %></td>
+              <td><% if (st.paid_at) { %><span class="tag crew-confirmed">Paid <%= fmtYmd(st.paid_at) %></span><% } else { %><span class="tag crew-asked">Unpaid</span><% } %></td>
               <td>
-                <form method="post" action="/admin/statements/<%= st.id %>/<%= st.paid_at ? 'unpaid' : 'paid' %>" style="margin:0"
-                      onsubmit="return confirm('<%= st.paid_at ? `Mark ${st.number} as unpaid? Invoices it marked paid go back to unpaid.` : `Mark ${st.number} and all its invoices as paid?` %>');">
-                  <button class="btn small secondary" type="submit"><%= st.paid_at ? "Mark unpaid" : "Mark paid" %></button>
-                </form>
+                <%- include("../partials/paid-form", { base: `/admin/statements/${st.id}`, paidAt: st.paid_at, what: "statement" }) %>
               </td>
             </tr>
           <% }) %>
