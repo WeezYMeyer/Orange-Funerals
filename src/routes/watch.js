@@ -21,6 +21,8 @@ router.get("/:slug", (req, res) => {
     unlocked,
     error: null,
     viewerName: req.session.viewerName || "",
+    // Entered their email on an earlier funeral: offer one-click "Continue as …".
+    remembered: req.session.viewerEmail ? { name: req.session.viewerName || "", email: req.session.viewerEmail } : null,
     formValues: {},
   });
 });
@@ -38,6 +40,7 @@ router.post("/:slug", (req, res) => {
       unlocked: false,
       error: "Please enter a valid email address.",
       viewerName: name,
+      remembered: null,
       formValues: { name, email },
     });
   }

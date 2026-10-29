@@ -28,16 +28,24 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
 // --- Sessions ---
-// Uses the default in-memory store, which is fine for a single-process
-// deployment (one small VPS / one Render service). If you ever run more
-// than one server instance behind a load balancer, swap this for a shared
-// store (e.g. Redis) so login/email-gate sessions stay consistent.
+// Stored in the SQLite database (lib/sessionStore.js) so staff logins and
+// viewers who already entered their email are remembered across deploys and
+// restarts. "rolling" renews the 90 days on every visit.
+const SqliteStore = require("./lib/sessionStore");
+app.set("trust proxy", 1); // Render sits in front of the app (HTTPS)
 app.use(
   session({
+    store: new SqliteStore(),
     secret: process.env.SESSION_SECRET || "dev-secret-change-me",
     resave: false,
     saveUninitialized: false,
-    cookie: { maxAge: 1000 * 60 * 60 * 24 * 30 }, // 30 days
+    rolling: true,
+    cookie: {
+      maxAge: 1000 * 60 * 60 * 24 * 90, // 90 days
+      httpOnly: true,
+      sameSite: "lax",
+      secure: "auto", // HTTPS cookie on the live site, still works on localhost
+    },
   })
 );
 
