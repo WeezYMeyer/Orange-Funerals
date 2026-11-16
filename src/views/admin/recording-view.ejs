@@ -1,0 +1,115 @@
+<%- include("../partials/admin-head", { title: stream.title + " · Recording" }) %>
+<%- include("../partials/admin-nav") %>
+<%
+const current = parts.find(p => p.id === currentId);
+const startedAt = (iso) => new Date(iso).toLocaleTimeString("en-ZA", { timeZone: "Africa/Johannesburg", hour: "2-digit", minute: "2-digit" });
+const noticeText = { thumb: "New picture saved.", "thumb-failed": "Couldn't make a new picture just now — please try again in a minute." }[notice];
+const bb = stream.bb_number ? (/^bb/i.test(stream.bb_number) ? stream.bb_number : "BB " + stream.bb_number) : null;
+%>
+<div class="container library">
+  <a class="back-link" href="/admin/recordings">← Recordings</a>
+
+  <div class="lib-title">
+    <h1><%= stream.title %></h1>
+    <span class="rec-state rec-state-<%= info.state.key %>"><%= info.state.label %></span>
+  </div>
+  <p class="rec-when big"><%= when %><% if (stream.venue_name) { %> · <%= stream.venue_name %><% } %></p>
+
+  <% if (noticeText) { %>
+    <div class="<%= notice === 'thumb-failed' ? 'error-box' : 'notice-box' %>"><%= noticeText %></div>
+  <% } %>
+
+  <div class="rec-view">
+    <div class="rec-main">
+      <div class="rec-player">
+        <% if (current.src) { %>
+          <video id="rec-video" controls playsinline preload="metadata" <% if (current.thumbUrl) { %>poster="<%= current.thumbUrl %>"<% } %> src="<%= current.src %>"></video>
+        <% } else { %>
+          <div class="rec-player-gone" <% if (current.thumbUrl) { %>style="background-image:url('<%= current.thumbUrl %>')"<% } %>>
+            <div>
+              <strong>The video was deleted<%= info.state.deletedAt ? " on " + info.state.deletedAt.toLocaleDateString("en-ZA", { timeZone: "Africa/Johannesburg", day: "numeric", month: "long", year: "numeric" }) : "" %></strong>
+              <span>Recordings are kept for a limited time. The details stay here for your records.</span>
+            </div>
+          </div>
+        <% } %>
+      </div>
+
+      <div class="rec-player-bar">
+        <div class="rec-player-meta">
+          <% if (parts.length > 1) { %><strong>Part <%= current.part %> of <%= parts.length %></strong> · <% } %>
+          started <%= startedAt(current.started_at) %>
+          <% if (current.duration) { %> · <%= current.duration %><% } %>
+          · <%= current.size %>
+        </div>
+        <% if (current.src) { %>
+          <div class="rec-player-actions">
+            <a class="btn small" href="/admin/recordings/part/<%= current.id %>/download">Download<%= parts.length > 1 ? " part " + current.part : "" %></a>
+            <form method="post" action="/admin/recordings/part/<%= current.id %>/thumb">
+              <button class="btn small secondary" type="submit" title="Takes the thumbnail from a different moment in the recording"><%= current.thumbUrl ? "Pick another picture" : "Make a picture" %></button>
+            </form>
+          </div>
+        <% } %>
+      </div>
+
+      <% if (parts.length > 1) { %>
+        <div class="rec-parts-strip">
+          <% parts.forEach(p => { %>
+            <a class="rec-part-tile <%= p.id === currentId ? 'current' : '' %>" href="/admin/recordings/<%= stream.slug %>?part=<%= p.part %>">
+              <span class="rec-part-thumb"><% if (p.thumbUrl) { %><img src="<%= p.thumbUrl %>" alt="" loading="lazy" /><% } %><% if (p.duration) { %><span class="rec-dur"><%= p.duration %></span><% } %></span>
+              <span class="rec-part-label">Part <%= p.part %> · <%= startedAt(p.started_at) %></span>
+            </a>
+          <% }) %>
+        </div>
+        <p class="help">The YoloBox stopped and started again during the service, so this recording is in <%= parts.length %> parts.</p>
+      <% } %>
+    </div>
+
+    <aside class="rec-side">
+      <div class="panel">
+        <h2 class="panel-title">Details</h2>
+        <dl class="rec-details">
+          <dt>Service</dt><dd><%= when %></dd>
+          <dt>Venue</dt><dd><%= [stream.venue_name, stream.venue_address].filter(Boolean).join(", ") || "—" %></dd>
+          <dt>Client</dt><dd><%= stream.account_client || "Private (no funeral home)" %></dd>
+          <% if (stream.account_client) { %>
+            <dt>Their reference</dt><dd><%= stream.late_name ? "Late " + stream.late_name : "—" %><%= bb ? " · " + bb : "" %></dd>
+          <% } %>
+          <dt>Client contact</dt><dd><%= [stream.contact_name, stream.contact_phone].filter(Boolean).join(" · ") || "—" %></dd>
+          <dt>Family</dt><dd><%= [stream.family_name, stream.family_email].filter(Boolean).join(" · ") || "—" %></dd>
+          <dt>Streamed by</dt><dd><%= crew.length ? crew.map(c => c.name).join(", ") : "—" %></dd>
+          <dt>Kit</dt><dd><%= stream.kit_name || "—" %></dd>
+          <dt>Loaded by</dt><dd><%= stream.creator_name || "—" %></dd>
+          <dt>Length</dt><dd><%= info.durationWords || "working it out…" %> · <%= info.size %><%= parts.length > 1 ? ` · ${parts.length} parts` : "" %></dd>
+        </dl>
+      </div>
+
+      <div class="panel">
+        <h2 class="panel-title">Viewers &amp; emails</h2>
+        <dl class="rec-details">
+          <dt>Viewers</dt><dd><%= counts.viewers %> joined · <%= counts.chat %> chat message<%= counts.chat === 1 ? "" : "s" %></dd>
+          <dt>Thank-you emails</dt><dd><%= counts.thanks %> sent</dd>
+          <dt>Family email</dt><dd><%= emailedAt ? "Sent " + emailedAt : (stream.family_email ? "Not sent" : "No family email") %></dd>
+          <% if (remindedAt) { %><dt>Reminder</dt><dd>Sent <%= remindedAt %></dd><% } %>
+          <dt>Family downloads</dt><dd><%= info.downloads %></dd>
+        </dl>
+      </div>
+
+      <div class="panel">
+        <h2 class="panel-title">How long it's kept</h2>
+        <dl class="rec-details">
+          <dt>Family link</dt>
+          <dd><%= info.state.key === "family" ? "Open until " + familyUntil : (familyUntil ? "Closed (was open until " + familyUntil + ")" : "—") %></dd>
+          <dt>Here</dt>
+          <dd><%= info.state.key === "deleted" ? "Video deleted" : "Until " + filesUntil + ", then deleted automatically" %></dd>
+        </dl>
+        <% if (familyPage) { %>
+          <label>Family recording page</label>
+          <div class="link-box"><a href="<%= familyPage %>" target="_blank" rel="noopener"><%= familyPage %></a></div>
+        <% } %>
+        <a class="btn small secondary" href="/admin/streams/<%= stream.slug %>">Open the funeral →</a>
+      </div>
+    </aside>
+  </div>
+</div>
+</body>
+</html>

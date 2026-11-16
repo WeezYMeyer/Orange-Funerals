@@ -3,13 +3,16 @@
 //   2. after End Stream, waits until the YoloBox has stopped and the
 //      recording has reached S3, then emails the family the download link
 //      and sends the usual thank-you email to everyone who watched
-//   3. reminds the family 3 days before the recording expires
-//   4. deletes the recording on its expiry date
+//   3. reminds the family 3 days before their link expires, and closes the
+//      family link / watch page replay on that date (RECORDING_DAYS, 28)
+//   4. works out each file's length and a thumbnail for the Recordings library
+//   5. deletes the files once staff no longer need them (LIBRARY_DAYS, 6 months)
 // Nothing here needs staff to click anything. Status shows on Settings.
 
 const { nanoid } = require("nanoid");
 const db = require("./db");
 const live = require("./liveServer");
+const media = require("./recordingMedia");
 
 const TICK_MS = 30 * 1000;
 const MIN = 60 * 1000;
@@ -20,6 +23,9 @@ const NO_RECORDING_AFTER_MIN = 60;
 const PRE_ROLL_MIN = 120;        // recordings that start up to 2 h before the service count
 const REMIND_DAYS_BEFORE = 3;
 const RETRY_EMAIL_EVERY_MS = 30 * MIN;
+const MEDIA_PER_TICK = 2;
+const MEDIA_MAX_ATTEMPTS = 3;
+const MEDIA_RETRY_MIN = 10;
 
 const state = {
   timer: null,
@@ -146,6 +152,7 @@ async function finalizeRecording(stream, now) {
 
   const ended = live.dbDate(stream.ended_at);
   const expires = live.endOfSastDayAfter(ended, live.recordingDays());
+  const filesExpire = live.endOfSastDayAfter(ended, live.libraryDays());
   const token = stream.recording_token || nanoid(32);
   const insert = db.prepare(
     "INSERT OR IGNORE INTO recordings (stream_id, s3_key, size_bytes, started_at, part) VALUES (?, ?, ?, ?, ?)"
@@ -153,9 +160,10 @@ async function finalizeRecording(stream, now) {
   db.transaction(() => {
     files.forEach((f, i) => insert.run(stream.id, f.key, f.size, iso(f.startedAt), i + 1));
     db.prepare(
-      `UPDATE streams SET recording_status = 'ready', recording_ready_at = ?, recording_expires_at = ?, recording_token = ?
+      `UPDATE streams SET recording_status = 'ready', recording_ready_at = ?, recording_expires_at = ?, recording_token = ?,
+              files_expire_at = ?
        WHERE id = ?`
-    ).run(iso(now), iso(expires), token, stream.id);
+    ).run(iso(now), iso(expires), token, iso(filesExpire), stream.id);
   })();
   console.log(`[live] recording ready for "${stream.title}" (${files.length} part(s))`);
 
@@ -194,7 +202,7 @@ function dueForRetry(key, now) {
   return !last || now.getTime() - last >= RETRY_EMAIL_EVERY_MS;
 }
 
-// ------------------------------------------------------------- 3 + 4. reminders, expiry
+// ------------------------------------------------------------- 3. reminders, family expiry
 
 async function remindersAndExpiry(now) {
   const ready = db
@@ -203,18 +211,11 @@ async function remindersAndExpiry(now) {
   for (const s of ready) {
     const expires = live.dbDate(s.recording_expires_at);
 
+    // The family link and the watch page stop playing it; the files stay for
+    // staff (Recordings) until filesExpireAt.
     if (expires <= now) {
-      const parts = db.prepare("SELECT * FROM recordings WHERE stream_id = ? AND deleted_at IS NULL").all(s.id);
-      try {
-        await live.deleteRecordings(parts.map((p) => p.s3_key));
-        db.transaction(() => {
-          db.prepare("UPDATE recordings SET deleted_at = ? WHERE stream_id = ? AND deleted_at IS NULL").run(iso(now), s.id);
-          db.prepare("UPDATE streams SET recording_status = 'expired' WHERE id = ?").run(s.id);
-        })();
-        console.log(`[live] recording expired and deleted for "${s.title}"`);
-      } catch (err) {
-        noteError(`deleting expired recording for "${s.title}"`, err);
-      }
+      db.prepare("UPDATE streams SET recording_status = 'expired' WHERE id = ?").run(s.id);
+      console.log(`[live] family link expired for "${s.title}" (staff keep it under Recordings)`);
       continue;
     }
 
@@ -231,6 +232,62 @@ async function remindersAndExpiry(now) {
     const longEnough = now - readyAt >= 24 * 60 * MIN; // never right after the first email
     if (s.family_emailed_at && !s.family_reminded_at && now >= remindFrom && longEnough && dueForRetry(`reminder:${s.id}`, now)) {
       await sendFamilyEmail(s.id, "reminder", now);
+    }
+  }
+}
+
+// When the files are deleted (stored on new recordings; worked out for older ones).
+function filesExpireAt(stream) {
+  return live.dbDate(stream.files_expire_at) || live.endOfSastDayAfter(live.dbDate(stream.ended_at), live.libraryDays());
+}
+
+// ------------------------------------------------------------- 4. length + thumbnail
+
+async function processMedia(now) {
+  const due = db
+    .prepare(
+      `SELECT * FROM recordings
+       WHERE deleted_at IS NULL AND media_at IS NULL AND media_attempts < ?
+         AND (media_tried_at IS NULL OR media_tried_at <= ?)
+       ORDER BY id LIMIT ?`
+    )
+    .all(MEDIA_MAX_ATTEMPTS, iso(new Date(now.getTime() - MEDIA_RETRY_MIN * MIN)), MEDIA_PER_TICK);
+  for (const r of due) {
+    db.prepare("UPDATE recordings SET media_attempts = media_attempts + 1, media_tried_at = ? WHERE id = ?").run(iso(now), r.id);
+    try {
+      const m = await media.analyse(r);
+      db.prepare(
+        "UPDATE recordings SET duration_sec = ?, thumb = ?, thumb_pos = ?, media_at = ?, media_error = ? WHERE id = ?"
+      ).run(m.durationSec, m.thumb, m.thumb ? m.thumbPos : null, iso(now), m.thumbError, r.id);
+      if (m.thumbError) console.log(`[live] no thumbnail for ${r.s3_key}: ${m.thumbError}`);
+    } catch (err) {
+      db.prepare("UPDATE recordings SET media_error = ? WHERE id = ?").run(String(err.message || err).slice(0, 300), r.id);
+      noteError(`reading ${r.s3_key}`, err);
+    }
+  }
+}
+
+// ------------------------------------------------------------- 5. delete old files
+
+async function deleteOldFiles(now) {
+  const rows = db
+    .prepare(
+      `SELECT * FROM streams
+       WHERE recording_status IN ('ready', 'expired') AND files_deleted_at IS NULL AND ended_at IS NOT NULL`
+    )
+    .all();
+  for (const s of rows) {
+    if (filesExpireAt(s) > now) continue;
+    const parts = db.prepare("SELECT * FROM recordings WHERE stream_id = ? AND deleted_at IS NULL").all(s.id);
+    try {
+      await live.deleteRecordings(parts.map((p) => p.s3_key));
+      db.transaction(() => {
+        db.prepare("UPDATE recordings SET deleted_at = ? WHERE stream_id = ? AND deleted_at IS NULL").run(iso(now), s.id);
+        db.prepare("UPDATE streams SET recording_status = 'expired', files_deleted_at = ? WHERE id = ?").run(iso(now), s.id);
+      })();
+      console.log(`[live] recording files deleted for "${s.title}" (library period over)`);
+    } catch (err) {
+      noteError(`deleting old recording for "${s.title}"`, err);
     }
   }
 }
@@ -271,6 +328,16 @@ async function tick(now = new Date()) {
       } catch (err) {
         noteError("reminders / expiry", err);
       }
+      try {
+        await deleteOldFiles(now);
+      } catch (err) {
+        noteError("deleting old recordings", err);
+      }
+      try {
+        await processMedia(now);
+      } catch (err) {
+        noteError("recording thumbnails", err);
+      }
     }
     state.lastTickAt = iso(now);
   } finally {
@@ -303,6 +370,8 @@ function status() {
     rtmpUrl: live.rtmpUrl(),
     cdnUrl: live.cdnUrl(),
     recordingDays: live.recordingDays(),
+    libraryDays: live.libraryDays(),
+    ffmpeg: media.ffmpegPath(),
     lastTickAt: state.lastTickAt,
     lastError: state.lastError,
     lastErrorAt: state.lastErrorAt,
@@ -315,4 +384,16 @@ function status() {
   };
 }
 
-module.exports = { start, tick, status, isOwnStream, currentStreamForKit, kitStatus, sendFamilyEmail, forgetEmailAttempts, windowFor };
+module.exports = {
+  start,
+  tick,
+  status,
+  isOwnStream,
+  currentStreamForKit,
+  kitStatus,
+  sendFamilyEmail,
+  forgetEmailAttempts,
+  windowFor,
+  filesExpireAt,
+  processMedia,
+};

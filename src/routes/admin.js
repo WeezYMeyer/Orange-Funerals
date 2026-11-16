@@ -189,6 +189,9 @@ router.use((req, res, next) => {
 const billing = require("./billing");
 router.use(billing);
 
+// Recordings library: every recorded funeral with a thumbnail, details and a player.
+router.use("/recordings", require("./library"));
+
 // --- Dashboard ---
 // Two tabs: "Upcoming" (default — anything not yet ended, i.e. still to
 // happen or currently live) and "Past" (ended streams, for looking
@@ -333,7 +336,12 @@ router.get("/streams/:slug", (req, res) => {
   if (liveJobs.isOwnStream(stream)) {
     const current = liveJobs.currentStreamForKit(stream.kit_id);
     const ks = liveJobs.kitStatus(stream.kit_id);
-    const parts = db.prepare("SELECT * FROM recordings WHERE stream_id = ? ORDER BY part").all(stream.id);
+    const parts = db
+      .prepare(
+        `SELECT id, part, s3_key, size_bytes, started_at, downloads, deleted_at, thumb_pos, (thumb IS NOT NULL) AS has_thumb
+         FROM recordings WHERE stream_id = ? ORDER BY part`
+      )
+      .all(stream.id);
     liveInfo = {
       isCurrent: Boolean(current && current.id === stream.id),
       kitLive: Boolean(ks && ks.is_live),
@@ -342,6 +350,7 @@ router.get("/streams/:slug", (req, res) => {
       parts: parts.map((p) => ({ ...p, sizeText: live.fmtSize(p.size_bytes) })),
       totalSize: live.fmtSize(parts.reduce((a, p) => a + (p.size_bytes || 0), 0)),
       expires: live.fmtSastDate(live.dbDate(stream.recording_expires_at)),
+      filesUntil: stream.ended_at ? live.fmtSastDate(liveJobs.filesExpireAt(stream)) : "",
       familyPage: stream.recording_token ? `${process.env.BASE_URL || "http://localhost:3000"}/recording/${stream.recording_token}` : null,
       downloads: parts.reduce((a, p) => a + (p.downloads || 0), 0),
     };

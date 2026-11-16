@@ -85,7 +85,7 @@ const groups = [
       <p class="help">Off. Funerals use YoloLive embed codes. To switch it on, add the <strong>LIVE_…</strong> variables from the orange-live stack under Environment in Render.</p>
     <% } else { %>
       <p class="help">
-        On. A funeral with a kit and <strong>no</strong> YoloLive embed code plays that kit's YoloBox, records it, emails the family the recording, reminds them 3 days before it expires and deletes it after <strong><%= live.recordingDays %> days</strong>.
+        On. A funeral with a kit and <strong>no</strong> YoloLive embed code plays that kit's YoloBox, records it and emails the family the recording (their link stays open for <strong><%= live.recordingDays %> days</strong>, with a reminder 3 days before it closes). Staff can still watch it under <a href="/admin/recordings">Recordings</a> for <strong><%= live.libraryDays %> days</strong>, then it is deleted.
       </p>
       <% if (!live.s3Ready || !live.awsKeysSet) { %>
         <div class="error-box">Recordings can't be found yet: add <strong>LIVE_RECORDINGS_BUCKET</strong>, <strong>LIVE_AWS_ACCESS_KEY_ID</strong> and <strong>LIVE_AWS_SECRET_ACCESS_KEY</strong> in Render.</div>

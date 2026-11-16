@@ -338,8 +338,8 @@ for (const name of ["Kit 1", "Kit 2", "Kit 3"]) {
 // --- Own live server (AWS) + automatic recordings (added Nov 2026) ---
 // Each kit's YoloBox streams to the Orange live server with a fixed key
 // (live/kit<id>). After End Stream the recordings for that kit are found in
-// S3, the family gets a download link, a reminder before it expires, and the
-// files are deleted on the expiry date. See lib/liveServer.js + lib/liveJobs.js.
+// S3, the family gets a download link and a reminder before it expires; staff
+// keep it under Recordings for longer. See lib/liveServer.js + lib/liveJobs.js.
 {
   const existing = new Set(db.prepare("PRAGMA table_info(streams)").all().map((c) => c.name));
   const cols = {
@@ -382,6 +382,28 @@ db.exec(`
     checked_at  TEXT NOT NULL                -- UTC ISO
   );
 `);
+
+// Recordings library (added Nov 2026): length + thumbnail per file, and the
+// files stay for staff (LIBRARY_DAYS, default 6 months) after the family
+// link has expired. See lib/recordingMedia.js and routes/library.js.
+{
+  const recCols = new Set(db.prepare("PRAGMA table_info(recordings)").all().map((c) => c.name));
+  const add = {
+    duration_sec: "REAL",
+    thumb: "BLOB",                                   // JPEG, 640 px wide
+    thumb_pos: "REAL",                               // where in the file the picture was taken (0..1)
+    media_at: "TEXT",                                // UTC, when length/picture were worked out
+    media_tried_at: "TEXT",
+    media_attempts: "INTEGER NOT NULL DEFAULT 0",
+    media_error: "TEXT",
+  };
+  for (const [name, type] of Object.entries(add)) {
+    if (!recCols.has(name)) db.exec(`ALTER TABLE recordings ADD COLUMN ${name} ${type}`);
+  }
+  const streamCols = new Set(db.prepare("PRAGMA table_info(streams)").all().map((c) => c.name));
+  if (!streamCols.has("files_expire_at")) db.exec("ALTER TABLE streams ADD COLUMN files_expire_at TEXT");   // UTC, files deleted then
+  if (!streamCols.has("files_deleted_at")) db.exec("ALTER TABLE streams ADD COLUMN files_deleted_at TEXT"); // UTC
+}
 
 // Optional auto-bootstrap of a staff login from environment variables.
 //

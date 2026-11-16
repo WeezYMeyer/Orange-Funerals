@@ -329,7 +329,8 @@ const scheduled = fmtScheduled(stream.service_date);
     <h2 class="panel-title">Recording</h2>
     <%
       const rs = stream.recording_status;
-      const recLabel = { waiting: "Waiting for the YoloBox to stop and the recording to upload", ready: "Ready", none: "No recording found", expired: "Expired and deleted" }[rs] || "Waiting";
+      const filesGone = Boolean(stream.files_deleted_at);
+      const recLabel = { waiting: "Waiting for the YoloBox to stop and the recording to upload", ready: "Ready", none: "No recording found", expired: filesGone ? "Deleted" : "Family link closed · still under Recordings" }[rs] || "Waiting";
     %>
     <p><span class="tag <%= rs === 'ready' ? 'email-sent' : (rs === 'none' ? 'email-failed' : '') %>"><%= recLabel %></span></p>
     <% if (rs === "waiting" || !rs) { %>
@@ -338,6 +339,11 @@ const scheduled = fmtScheduled(stream.service_date);
       <p class="help">The live server has no recording for <%= kit ? kit.name : "this kit" %> between the start of the service and End Stream. If YoloLive was used instead, paste its recording embed code below.</p>
     <% } %>
     <% if (liveInfo.parts.length) { %>
+      <% const cover = liveInfo.parts.find(p => p.has_thumb); %>
+      <a class="rec-mini" href="/admin/recordings/<%= stream.slug %>">
+        <span class="rec-mini-thumb"><% if (cover) { %><img src="/admin/recordings/part/<%= cover.id %>/thumb.jpg?v=<%= encodeURIComponent(cover.thumb_pos || 0) %>" alt="" /><% } %></span>
+        <span><strong><%= filesGone ? "View in Recordings" : "Watch or download in Recordings" %> →</strong><br /><span class="help">Kept there until <%= liveInfo.filesUntil %><%= filesGone ? "" : ", then deleted automatically" %>.</span></span>
+      </a>
       <table class="rec-parts">
         <% liveInfo.parts.forEach(p => { %>
           <tr>
@@ -350,7 +356,7 @@ const scheduled = fmtScheduled(stream.service_date);
       </table>
     <% } %>
     <% if (rs === "ready") { %>
-      <p class="help">Available to the family and on the watch link until <strong><%= liveInfo.expires %></strong>, then deleted automatically.</p>
+      <p class="help">Available to the family and on the watch link until <strong><%= liveInfo.expires %></strong>. Staff can still watch it under Recordings until <%= liveInfo.filesUntil %>.</p>
       <% if (liveInfo.familyPage) { %>
         <label>Family recording page</label>
         <div class="link-box"><a href="<%= liveInfo.familyPage %>" target="_blank"><%= liveInfo.familyPage %></a></div>

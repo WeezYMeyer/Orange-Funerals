@@ -1,0 +1,102 @@
+<%- include("../partials/admin-head", { title: "Recordings" }) %>
+<%- include("../partials/admin-nav") %>
+<%
+const anyFilter = filters.q || filters.home || filters.show;
+const months = Math.round(libraryDays / 30.4);
+const keepText = libraryDays % 30 === 0 || months < 2 ? `${libraryDays} days` : `${months} months`;
+function pageUrl(p) {
+  const qs = new URLSearchParams();
+  if (filters.q) qs.set("q", filters.q);
+  if (filters.home) qs.set("home", filters.home);
+  if (filters.show) qs.set("show", filters.show);
+  if (p > 1) qs.set("page", p);
+  const s = qs.toString();
+  return "/admin/recordings" + (s ? "?" + s : "");
+}
+%>
+<div class="container library">
+  <div class="lib-head">
+    <div>
+      <h1>Recordings</h1>
+      <p class="help">Every funeral recorded on the Orange live server. The family can watch theirs for <%= recordingDays %> days; you can watch and download them here for <%= keepText %>, then the video is deleted automatically (the tile and details stay).</p>
+    </div>
+    <div class="lib-stored" title="Recordings currently kept on AWS">
+      <strong><%= stored.size %></strong>
+      <span>stored · <%= stored.funerals %> funeral<%= stored.funerals === 1 ? "" : "s" %></span>
+    </div>
+  </div>
+
+  <form class="lib-filters" method="get" action="/admin/recordings">
+    <input type="search" name="q" value="<%= filters.q %>" placeholder="Search name, family, venue, operator, BB number…" aria-label="Search recordings" />
+    <select name="home" aria-label="Client">
+      <option value="">All clients</option>
+      <option value="__private" <%= filters.home === "__private" ? "selected" : "" %>>Private (no funeral home)</option>
+      <% homes.forEach(h => { %>
+        <option value="<%= h %>" <%= filters.home === h ? "selected" : "" %>><%= h %></option>
+      <% }) %>
+    </select>
+    <select name="show" aria-label="Show">
+      <option value="">All recordings</option>
+      <option value="available" <%= filters.show === "available" ? "selected" : "" %>>Can still be watched</option>
+      <option value="deleted" <%= filters.show === "deleted" ? "selected" : "" %>>Video deleted</option>
+    </select>
+    <button class="btn small" type="submit">Search</button>
+    <% if (anyFilter) { %><a class="lib-clear" href="/admin/recordings">Clear</a><% } %>
+  </form>
+
+  <% if (!cards.length) { %>
+    <div class="panel empty-state">
+      <% if (anyFilter) { %>
+        <p>No recordings match that search.</p>
+      <% } else { %>
+        <p>No recordings yet. A funeral streamed on the Orange live server shows up here about 5 minutes after <strong>End Stream</strong>, once the YoloBox has stopped.</p>
+      <% } %>
+    </div>
+  <% } else { %>
+    <p class="lib-count"><%= total %> recording<%= total === 1 ? "" : "s" %><%= anyFilter ? " found" : "" %></p>
+    <div class="rec-grid">
+      <% cards.forEach(c => { %>
+        <a class="rec-card <%= c.state.key === 'deleted' ? 'is-deleted' : '' %>" href="/admin/recordings/<%= c.slug %>">
+          <div class="rec-thumb">
+            <% if (c.cover) { %>
+              <img src="<%= c.cover %>" alt="" loading="lazy" />
+            <% } else { %>
+              <div class="rec-thumb-empty">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="2.5" y="5" width="14" height="14" rx="2.5" stroke="currentColor" stroke-width="1.6"/><path d="M16.5 10.2 21.5 7v10l-5-3.2" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+                <span><%= c.processing ? "Picture coming in a minute…" : "No picture" %></span>
+              </div>
+            <% } %>
+            <% if (c.state.key !== "deleted") { %>
+              <span class="rec-play" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z" fill="currentColor"/></svg></span>
+            <% } else { %>
+              <span class="rec-gone">Video deleted</span>
+            <% } %>
+            <% if (c.duration) { %><span class="rec-dur"><%= c.duration %></span><% } %>
+            <% if (c.parts.length > 1) { %><span class="rec-partcount"><%= c.parts.length %> parts</span><% } %>
+          </div>
+          <div class="rec-body">
+            <span class="rec-state rec-state-<%= c.state.key %>"><%= c.state.label %></span>
+            <h3><%= c.title %></h3>
+            <p class="rec-when"><%= c.when %><% if (c.venue_name) { %> · <%= c.venue_name %><% } %></p>
+            <dl class="rec-facts">
+              <dt>Client</dt><dd><%= c.account_client || "Private" %></dd>
+              <dt>Family</dt><dd><%= c.family_name || c.contact_name || "—" %></dd>
+              <dt>Streamed by</dt><dd><%= c.crew_confirmed || "—" %><% if (c.kit_name) { %> <span class="rec-kit">· <%= c.kit_name %></span><% } %></dd>
+            </dl>
+            <p class="rec-stats"><%= c.viewer_count %> viewer<%= c.viewer_count === 1 ? "" : "s" %> · <%= c.downloads %> family download<%= c.downloads === 1 ? "" : "s" %> · <%= c.size %></p>
+          </div>
+        </a>
+      <% }) %>
+    </div>
+
+    <% if (pages > 1) { %>
+      <nav class="lib-pages" aria-label="Pages">
+        <% if (page > 1) { %><a class="btn small secondary" href="<%= pageUrl(page - 1) %>">← Newer</a><% } %>
+        <span>Page <%= page %> of <%= pages %></span>
+        <% if (page < pages) { %><a class="btn small secondary" href="<%= pageUrl(page + 1) %>">Older →</a><% } %>
+      </nav>
+    <% } %>
+  <% } %>
+</div>
+</body>
+</html>

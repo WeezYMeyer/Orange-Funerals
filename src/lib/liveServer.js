@@ -7,7 +7,9 @@
 //   LIVE_RECORDINGS_BUCKET       orange-live-recordings-<account>
 //   LIVE_AWS_REGION              af-south-1
 //   LIVE_AWS_ACCESS_KEY_ID / LIVE_AWS_SECRET_ACCESS_KEY   (IAM user orange-live-app)
-//   RECORDING_DAYS               optional, default 28 (keep in step with the stack's 30-day clean-up)
+//   RECORDING_DAYS               optional, default 28: how long the family link and watch page play it
+//   LIBRARY_DAYS                 optional, default 183 (6 months): how long staff can still watch it under
+//                                Recordings before the files are deleted (keep below the stack's clean-up days)
 //
 // Times: the database stores UTC. The YoloBox recordings are named in South
 // African time (UTC+2, no daylight saving), e.g. 2026-11-16_07-22-48-835589.mp4.
@@ -27,6 +29,13 @@ function enabled() {
 function recordingDays() {
   const n = parseInt(process.env.RECORDING_DAYS || "28", 10);
   return Number.isFinite(n) && n >= 1 && n <= 365 ? n : 28;
+}
+
+// Staff keep the files longer than the family link (never shorter).
+function libraryDays() {
+  const n = parseInt(process.env.LIBRARY_DAYS || "183", 10);
+  const days = Number.isFinite(n) && n >= 1 && n <= 3650 ? n : 183;
+  return Math.max(days, recordingDays());
 }
 
 // Kit 1 -> "kit1". The YoloBox path is live/kit1.
@@ -144,6 +153,14 @@ async function deleteRecordings(keys) {
   }
 }
 
+// Bytes start..end (inclusive) of a recording, for reading its header,
+// last seconds or one picture without downloading the whole file.
+async function readRange(key, start, end) {
+  const { GetObjectCommand } = require("@aws-sdk/client-s3");
+  const res = await s3().send(new GetObjectCommand({ Bucket: bucket(), Key: key, Range: `bytes=${start}-${end}` }));
+  return Buffer.from(await res.Body.transformToByteArray());
+}
+
 // A one-hour link that downloads the file with a friendly name.
 async function downloadUrl(key, filename) {
   const { GetObjectCommand } = require("@aws-sdk/client-s3");
@@ -213,6 +230,7 @@ module.exports = {
   cdnUrl,
   rtmpUrl,
   recordingDays,
+  libraryDays,
   streamNameForKit,
   streamKeyForKit,
   liveUrlForKit,
@@ -220,6 +238,7 @@ module.exports = {
   isKitLive,
   listKitRecordings,
   deleteRecordings,
+  readRange,
   downloadUrl,
   startTimeFromKey,
   serviceDateToUtc,
