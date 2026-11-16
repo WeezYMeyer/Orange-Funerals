@@ -21,6 +21,8 @@ const QUIET_MIN = 4;             // YoloBox must have been off (or restarted) th
 const GIVE_UP_WAITING_MIN = 180; // YoloBox left streaming after End Stream: use what's there
 const NO_RECORDING_AFTER_MIN = 60;
 const PRE_ROLL_MIN = 120;        // recordings that start up to 2 h before the service count
+const TEST_BEFORE_MIN = 10;      // ...unless they ended 10+ min before the service (a test stream)
+const BLIP_SEC = 15;             // a part shorter than this is a reconnect blip, not worth a part
 const REMIND_DAYS_BEFORE = 3;
 const RETRY_EMAIL_EVERY_MS = 30 * MIN;
 const MEDIA_PER_TICK = 2;
@@ -135,11 +137,39 @@ function windowFor(stream) {
   return { start, end: ended };
 }
 
+// Of the files in the window, leave out test streams that finished well before
+// the service and few-second blips from a reconnect - but only when something
+// else is left, so a funeral never ends up with no recording because of this.
+async function dropTestsAndBlips(stream, files) {
+  if (files.length < 2) return files;
+  const service = live.serviceDateToUtc(stream.service_date);
+  const testCutoff = service ? new Date(service.getTime() - TEST_BEFORE_MIN * MIN) : null;
+  const info = [];
+  for (const f of files) {
+    let durationSec = null;
+    try {
+      durationSec = await media.durationOnly(f.key, f.size);
+    } catch {
+      /* can't tell - keep it */
+    }
+    const endsAt = durationSec === null ? null : new Date(f.startedAt.getTime() + durationSec * 1000);
+    let skip = null;
+    if (testCutoff && endsAt && endsAt < testCutoff) skip = "test stream that ended before the service";
+    else if (durationSec !== null && durationSec < BLIP_SEC) skip = `only ${Math.round(durationSec)} s long (reconnect)`;
+    info.push({ ...f, durationSec, skip });
+  }
+  const keep = info.filter((f) => !f.skip);
+  if (!keep.length) return info;
+  info.filter((f) => f.skip).forEach((f) => console.log(`[live] "${stream.title}": left out ${f.key} - ${f.skip}`));
+  return keep;
+}
+
 async function finalizeRecording(stream, now) {
   const minsSinceEnd = (now - live.dbDate(stream.ended_at)) / MIN;
   const { start, end } = windowFor(stream);
-  const files = (await live.listKitRecordings(stream.kit_id)).filter(
-    (f) => f.startedAt > start && f.startedAt <= end
+  const files = await dropTestsAndBlips(
+    stream,
+    (await live.listKitRecordings(stream.kit_id)).filter((f) => f.startedAt > start && f.startedAt <= end)
   );
 
   if (!files.length) {
@@ -155,10 +185,10 @@ async function finalizeRecording(stream, now) {
   const filesExpire = live.endOfSastDayAfter(ended, live.libraryDays());
   const token = stream.recording_token || nanoid(32);
   const insert = db.prepare(
-    "INSERT OR IGNORE INTO recordings (stream_id, s3_key, size_bytes, started_at, part) VALUES (?, ?, ?, ?, ?)"
+    "INSERT OR IGNORE INTO recordings (stream_id, s3_key, size_bytes, started_at, part, duration_sec) VALUES (?, ?, ?, ?, ?, ?)"
   );
   db.transaction(() => {
-    files.forEach((f, i) => insert.run(stream.id, f.key, f.size, iso(f.startedAt), i + 1));
+    files.forEach((f, i) => insert.run(stream.id, f.key, f.size, iso(f.startedAt), i + 1, f.durationSec ?? null));
     db.prepare(
       `UPDATE streams SET recording_status = 'ready', recording_ready_at = ?, recording_expires_at = ?, recording_token = ?,
               files_expire_at = ?

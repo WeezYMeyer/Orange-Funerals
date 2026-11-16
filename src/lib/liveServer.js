@@ -47,6 +47,12 @@ function liveUrlForKit(kitId) {
   return `${cdnUrl()}/live/${streamNameForKit(kitId)}/index.m3u8`;
 }
 
+// The same stream in 3 qualities (made on the live server while it is live);
+// the player falls back to liveUrlForKit if this isn't there.
+function abrUrlForKit(kitId) {
+  return `${cdnUrl()}/abr/${streamNameForKit(kitId)}/master.m3u8`;
+}
+
 function rtmpUrl() {
   return (process.env.LIVE_RTMP_URL || "").trim().replace(/\/+$/, "");
 }
@@ -241,6 +247,7 @@ module.exports = {
   streamNameForKit,
   streamKeyForKit,
   liveUrlForKit,
+  abrUrlForKit,
   playbackUrl,
   isKitLive,
   listKitRecordings,

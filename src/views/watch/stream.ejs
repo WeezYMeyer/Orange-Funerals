@@ -66,7 +66,7 @@
       <div class="video-wrap">
         <% if (player && player.mode === "live") { %>
           <%# Orange live server: plays the kit's stream and reconnects by itself if it drops. %>
-          <video id="live-video" data-src="<%= player.src %>" data-state-url="/watch/<%= stream.slug %>/state" playsinline controls autoplay></video>
+          <video id="live-video" data-src="<%= player.src %>" data-abr="<%= player.abr || '' %>" data-state-url="/watch/<%= stream.slug %>/state" playsinline autoplay></video>
           <div class="video-pending video-overlay" id="live-overlay">
             <div>
               <strong>Waiting for the livestream</strong>

@@ -293,6 +293,13 @@ async function analyse(rec, position = POSITIONS[0]) {
   return { durationSec, thumb, thumbPos: position, thumbError };
 }
 
+// Only the length in seconds (used to tell a test stream or a reconnect blip
+// from the real service).
+async function durationOnly(key, size) {
+  const header = await readHeader(key, Number(size || 0));
+  return durationOf(key, Number(size || 0), header);
+}
+
 // Just a new picture (for "Pick another picture").
 async function newThumbnail(rec) {
   const size = Number(rec.size_bytes || 0);
@@ -321,4 +328,4 @@ function fmtDurationWords(sec) {
   return h ? `${h} h ${mins % 60} min` : `${mins} min`;
 }
 
-module.exports = { analyse, newThumbnail, fmtDuration, fmtDurationWords, ffmpegPath, POSITIONS, _test: { findMoofs, parseMoof, readBox } };
+module.exports = { analyse, newThumbnail, durationOnly, fmtDuration, fmtDurationWords, ffmpegPath, POSITIONS, _test: { findMoofs, parseMoof, readBox } };

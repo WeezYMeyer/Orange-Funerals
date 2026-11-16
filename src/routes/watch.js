@@ -18,7 +18,7 @@ function playerFor(stream) {
   if (!stream.ended_at) {
     const current = liveJobs.currentStreamForKit(stream.kit_id);
     if (current && current.id === stream.id) {
-      return { mode: "live", src: live.liveUrlForKit(stream.kit_id) };
+      return { mode: "live", src: live.liveUrlForKit(stream.kit_id), abr: live.abrUrlForKit(stream.kit_id) };
     }
     return { mode: "notyet" };
   }
