@@ -403,6 +403,17 @@ db.exec(`
   const streamCols = new Set(db.prepare("PRAGMA table_info(streams)").all().map((c) => c.name));
   if (!streamCols.has("files_expire_at")) db.exec("ALTER TABLE streams ADD COLUMN files_expire_at TEXT");   // UTC, files deleted then
   if (!streamCols.has("files_deleted_at")) db.exec("ALTER TABLE streams ADD COLUMN files_deleted_at TEXT"); // UTC
+  // Holding slide: an image shown on the watch page before the stream starts
+  // (and while it waits for the YoloBox). Kept in its own table so the image
+  // isn't read every time a funeral row is.
+  if (!streamCols.has("slide_at")) db.exec("ALTER TABLE streams ADD COLUMN slide_at TEXT"); // UTC, NULL = no slide
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS stream_slides (
+      stream_id   INTEGER PRIMARY KEY REFERENCES streams(id),
+      image       BLOB NOT NULL,              -- JPEG, at most 1920x1080
+      updated_at  TEXT NOT NULL
+    );
+  `);
 }
 
 // Optional auto-bootstrap of a staff login from environment variables.

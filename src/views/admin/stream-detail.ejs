@@ -19,6 +19,10 @@ if (notice === "already-sent") {
   noticeHtml = "The family email was not sent: " + decodeURIComponent(notice.replace("family-error-", ""));
 } else if (notice === "recording-saved") {
   noticeHtml = "Recording saved — the watch link now plays the recording.";
+} else if (notice === "slide-saved") {
+  noticeHtml = "Holding slide saved — it shows on the watch page until the stream starts.";
+} else if (notice === "slide-removed") {
+  noticeHtml = "Holding slide removed.";
 } else if (notice === "recording-removed") {
   noticeHtml = "Recording removed — the watch link shows the original live embed again.";
 }
@@ -103,6 +107,69 @@ const scheduled = fmtScheduled(stream.service_date);
       </form>
       <p class="help">After the service: end the stream, then on the <strong>Emails</strong> tab add YoloLive's recording embed code and send the thank-you emails.</p>
     <% } %>
+  </div>
+
+  <div class="panel" id="slide">
+    <h2 class="panel-title">Holding slide</h2>
+    <% const slideUrl = stream.slide_at ? `/watch/${stream.slug}/slide.jpg?v=${encodeURIComponent(stream.slide_at)}` : null; %>
+    <div class="slide-admin">
+      <div class="slide-preview">
+        <% if (slideUrl) { %>
+          <img src="<%= slideUrl %>" alt="Holding slide" />
+        <% } else { %>
+          <span>No slide yet — viewers see “Waiting for the livestream”.</span>
+        <% } %>
+      </div>
+      <div>
+        <p class="help" style="margin-top:0;">Shown on the watch page before the stream starts, whenever it's waiting for the YoloBox (for example after a restart), and on the recording before someone presses play. A 16:9 picture (1920×1080) fits best — a photo, the service details or the programme cover.</p>
+        <input type="file" id="slide-file" accept="image/jpeg,image/png,image/webp" hidden />
+        <div class="slide-actions">
+          <button type="button" class="btn small" id="slide-pick"><%= slideUrl ? "Replace slide" : "Upload a slide" %></button>
+          <% if (slideUrl) { %>
+            <form method="post" action="/admin/streams/<%= stream.slug %>/slide/remove" onsubmit="return confirm('Remove the holding slide?');">
+              <button type="submit" class="btn small secondary">Remove</button>
+            </form>
+          <% } %>
+        </div>
+        <p class="help" id="slide-status" role="status"></p>
+      </div>
+    </div>
+    <script>
+    (function () {
+      var pick = document.getElementById("slide-pick"), file = document.getElementById("slide-file"), status = document.getElementById("slide-status");
+      pick.addEventListener("click", function () { file.click(); });
+      file.addEventListener("change", function () {
+        var f = file.files && file.files[0];
+        if (!f) return;
+        status.textContent = "Uploading…";
+        pick.disabled = true;
+        var img = new Image();
+        img.onload = function () {
+          // At most 1920x1080, as a JPEG.
+          var scale = Math.min(1, 1920 / img.naturalWidth, 1080 / img.naturalHeight);
+          var c = document.createElement("canvas");
+          c.width = Math.round(img.naturalWidth * scale);
+          c.height = Math.round(img.naturalHeight * scale);
+          var ctx = c.getContext("2d");
+          ctx.fillStyle = "#000";
+          ctx.fillRect(0, 0, c.width, c.height);
+          ctx.drawImage(img, 0, 0, c.width, c.height);
+          URL.revokeObjectURL(img.src);
+          c.toBlob(function (blob) {
+            fetch("/admin/streams/<%= stream.slug %>/slide", { method: "POST", headers: { "Content-Type": "image/jpeg" }, body: blob })
+              .then(function (r) { return r.json(); })
+              .then(function (r) {
+                if (r.ok) window.location.href = "/admin/streams/<%= stream.slug %>?notice=slide-saved#link";
+                else { status.textContent = r.error || "Upload failed."; pick.disabled = false; }
+              })
+              .catch(function () { status.textContent = "Upload failed — please try again."; pick.disabled = false; });
+          }, "image/jpeg", 0.88);
+        };
+        img.onerror = function () { status.textContent = "That file couldn't be opened as a picture — please use a JPG or PNG."; pick.disabled = false; };
+        img.src = URL.createObjectURL(f);
+      });
+    })();
+    </script>
   </div>
 
   <div class="panel">

@@ -956,3 +956,36 @@ td.overdue { color: var(--danger); font-weight: 600; }
   .lp-behind { display: none; }
   .lp-btn { width: 40px; height: 40px; }
 }
+
+/* Holding slide (Nov 2026): the funeral's picture behind the waiting messages */
+.video-pending.has-slide { background: #000 center / contain no-repeat; place-items: end center; padding: 0 12px 16px; }
+.video-pending.has-slide > div { background: rgba(20, 20, 20, 0.74); border-radius: 999px; padding: 9px 18px; max-width: 100%; }
+.video-pending.has-slide strong { display: inline; font-family: var(--sans); font-weight: 600; font-size: 14px; margin: 0; }
+.video-pending.has-slide span { display: none; }
+.slide-admin { display: grid; grid-template-columns: 260px 1fr; gap: 18px; align-items: start; }
+.slide-preview { aspect-ratio: 16 / 9; background: #2b2b2b; border-radius: var(--radius); overflow: hidden; display: grid; place-items: center; text-align: center; color: #cfcac2; font-size: 13px; padding: 0; }
+.slide-preview span { padding: 12px; }
+.slide-preview img { width: 100%; height: 100%; object-fit: contain; display: block; background: #000; }
+.slide-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.slide-actions form { margin: 0; }
+.slide-actions .btn { margin-top: 0; }
+@media (max-width: 640px) { .slide-admin { grid-template-columns: 1fr; } }
+/* Live player quality menu */
+.lp-q { position: relative; margin-right: 2px; }
+.lp-q[hidden] { display: none; }
+.lp-qbtn { appearance: none; -webkit-appearance: none; height: 34px; padding: 0 12px; margin: 0; border: 1px solid rgba(255, 255, 255, 0.35); border-radius: 999px; background: rgba(0, 0, 0, 0.25); color: #fff; font: 600 13px/1 var(--sans); cursor: pointer; white-space: nowrap; box-shadow: none; }
+.lp-qbtn:hover { background: rgba(255, 255, 255, 0.14); }
+.lp-qbtn:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
+.lp-qnow { font-weight: 500; opacity: 0.85; }
+.lp-qmenu { position: absolute; right: 0; bottom: 44px; min-width: 150px; padding: 6px; border-radius: 12px; background: rgba(24, 24, 24, 0.96); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45); z-index: 4; }
+.lp-qmenu[hidden] { display: none; }
+.lp-qitem { appearance: none; -webkit-appearance: none; display: flex; align-items: center; gap: 10px; width: 100%; margin: 0; padding: 9px 12px; border: 0; border-radius: 8px; background: transparent; color: #fff; font: 500 14px/1.2 var(--sans); text-align: left; cursor: pointer; box-shadow: none; }
+.lp-qitem::before { content: ""; width: 14px; flex: none; }
+.lp-qitem[aria-checked="true"]::before { content: "\2713"; }
+.lp-qitem:hover, .lp-qitem:focus-visible { background: rgba(255, 255, 255, 0.12); outline: none; }
+@media (max-width: 600px) { .lp-qnow { display: none; } .lp-qbtn { height: 32px; padding: 0 10px; } }
+@media (max-width: 600px) {
+  .video-pending.has-slide { padding-bottom: 10px; }
+  .video-pending.has-slide > div { padding: 6px 12px; }
+  .video-pending.has-slide strong { font-size: 12.5px; }
+}

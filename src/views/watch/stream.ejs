@@ -63,11 +63,16 @@
     </div>
   <% } else { %>
     <div class="stream-layout <%= stream.chat_enabled ? '' : 'no-chat' %>" id="stream-layout">
+      <%
+        // Holding slide (uploaded on the funeral's Link tab): shown behind the waiting messages.
+        const slideUrl = stream.slide_at ? `/watch/${stream.slug}/slide.jpg?v=${encodeURIComponent(stream.slide_at)}` : null;
+        const slideClass = slideUrl ? " has-slide" : "";
+      %>
       <div class="video-wrap">
         <% if (player && player.mode === "live") { %>
           <%# Orange live server: plays the kit's stream and reconnects by itself if it drops. %>
           <video id="live-video" data-src="<%= player.src %>" data-abr="<%= player.abr || '' %>" data-state-url="/watch/<%= stream.slug %>/state" playsinline autoplay></video>
-          <div class="video-pending video-overlay" id="live-overlay">
+          <div class="video-pending video-overlay<%= slideClass %>" id="live-overlay"<% if (slideUrl) { %> style="background-image:url('<%= slideUrl %>')"<% } %>>
             <div>
               <strong>Waiting for the livestream</strong>
               <span>It will start (or continue) here automatically — there's no need to refresh this page.</span>
@@ -75,7 +80,7 @@
           </div>
           <button type="button" class="sound-btn" id="sound-btn" hidden>Tap to turn the sound on</button>
         <% } else if (player && player.mode === "replay") { %>
-          <video id="replay-video" playsinline controls preload="metadata" src="<%= player.parts[0].src %>"></video>
+          <video id="replay-video" playsinline controls preload="metadata"<% if (slideUrl) { %> poster="<%= slideUrl %>"<% } %> src="<%= player.parts[0].src %>"></video>
         <% } else if (player) { %>
           <%
             const msgs = {
@@ -86,7 +91,7 @@
             };
             const [title, sub] = msgs[player.mode] || msgs.notyet;
           %>
-          <div class="video-pending">
+          <div class="video-pending<%= slideClass %>"<% if (slideUrl) { %> style="background-image:url('<%= slideUrl %>')"<% } %>>
             <div>
               <strong><%= title %></strong>
               <span><%= sub %></span>
@@ -97,7 +102,7 @@
           <% if (playEmbed && playEmbed.trim()) { %>
             <%- playEmbed %>
           <% } else { %>
-            <div class="video-pending">
+            <div class="video-pending<%= slideClass %>"<% if (slideUrl) { %> style="background-image:url('<%= slideUrl %>')"<% } %>>
               <div>
                 <strong>The livestream will appear here</strong>
                 <span>Please refresh this page closer to the start of the service.</span>

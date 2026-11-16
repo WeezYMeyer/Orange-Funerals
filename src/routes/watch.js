@@ -43,6 +43,16 @@ function isUnlocked(req, streamId) {
 // The live player asks every minute whether this page should still show the
 // live stream (it stops when staff press End Stream, so viewers never drift
 // into the next funeral on the same kit).
+// The funeral's holding slide (uploaded on the funeral's Link tab).
+router.get("/:slug/slide.jpg", (req, res) => {
+  const row = db
+    .prepare("SELECT ss.image FROM stream_slides ss JOIN streams s ON s.id = ss.stream_id WHERE s.slug = ?")
+    .get(req.params.slug);
+  if (!row) return res.status(404).end();
+  res.set({ "Content-Type": "image/jpeg", "Cache-Control": "public, max-age=86400" });
+  res.send(row.image);
+});
+
 router.get("/:slug/state", (req, res) => {
   const stream = db.prepare("SELECT * FROM streams WHERE slug = ?").get(req.params.slug);
   if (!stream) return res.status(404).json({ mode: "missing" });

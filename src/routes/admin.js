@@ -460,6 +460,37 @@ router.post("/streams/:slug/family-email", async (req, res) => {
   res.redirect(`/admin/streams/${stream.slug}?notice=${notice}#emails`);
 });
 
+// --- Holding slide (image on the watch page before the stream starts) ---
+// The browser shrinks the picture to at most 1920x1080 JPEG before sending
+// it, so it arrives as plain JPEG bytes (no form upload library needed).
+router.post("/streams/:slug/slide", express.raw({ type: ["image/jpeg"], limit: "8mb" }), (req, res) => {
+  const stream = db.prepare("SELECT id FROM streams WHERE slug = ?").get(req.params.slug);
+  if (!stream) return res.status(404).json({ ok: false, error: "Stream not found" });
+  const img = req.body;
+  if (!Buffer.isBuffer(img) || img.length < 2000 || img[0] !== 0xff || img[1] !== 0xd8 || img[2] !== 0xff) {
+    return res.status(400).json({ ok: false, error: "That doesn't look like a picture - please use a JPG or PNG." });
+  }
+  const now = new Date().toISOString();
+  db.transaction(() => {
+    db.prepare(
+      `INSERT INTO stream_slides (stream_id, image, updated_at) VALUES (?, ?, ?)
+       ON CONFLICT(stream_id) DO UPDATE SET image = excluded.image, updated_at = excluded.updated_at`
+    ).run(stream.id, img, now);
+    db.prepare("UPDATE streams SET slide_at = ? WHERE id = ?").run(now, stream.id);
+  })();
+  res.json({ ok: true });
+});
+
+router.post("/streams/:slug/slide/remove", (req, res) => {
+  const stream = db.prepare("SELECT id, slug FROM streams WHERE slug = ?").get(req.params.slug);
+  if (!stream) return res.status(404).send("Stream not found");
+  db.transaction(() => {
+    db.prepare("DELETE FROM stream_slides WHERE stream_id = ?").run(stream.id);
+    db.prepare("UPDATE streams SET slide_at = NULL WHERE id = ?").run(stream.id);
+  })();
+  res.redirect(`/admin/streams/${stream.slug}?notice=slide-removed#link`);
+});
+
 // --- Edit stream (title / embed code / date-time) ---
 // The slug never changes here, so a link you've already sent out keeps
 // working even after you update the embed code.
@@ -508,7 +539,15 @@ router.post("/streams/:slug/delete", (req, res) => {
     ...billing.billedEmails(stream.id),
   ];
 
+  // Its recording files on the live server's storage go too (in the background).
+  const recKeys = db.prepare("SELECT s3_key FROM recordings WHERE stream_id = ? AND deleted_at IS NULL").all(stream.id).map((r) => r.s3_key);
+  if (recKeys.length && live.s3Ready()) {
+    live.deleteRecordings(recKeys).catch((err) => console.error("[live] deleting recordings of a deleted funeral:", err.message));
+  }
+
   const deleteAll = db.transaction((streamId) => {
+    db.prepare("DELETE FROM recordings WHERE stream_id = ?").run(streamId);
+    db.prepare("DELETE FROM stream_slides WHERE stream_id = ?").run(streamId);
     db.prepare("DELETE FROM email_logs WHERE stream_id = ?").run(streamId);
     db.prepare("DELETE FROM chat_messages WHERE stream_id = ?").run(streamId);
     db.prepare("DELETE FROM stream_views WHERE stream_id = ?").run(streamId);

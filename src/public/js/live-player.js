@@ -6,8 +6,9 @@
 // - Sits about 12 seconds behind live, so a slow or patchy connection has
 //   time to catch up without the picture freezing.
 // - Its own controls: play/pause, back 10 seconds (up to 30 minutes), a LIVE
-//   badge that turns into "Jump to live" when the viewer is behind, sound and
-//   full screen. No moving progress bar.
+//   badge that turns into "Jump to live" when the viewer is behind, a quality
+//   menu (Auto / 720p / 480p / 360p), sound and full screen. No moving
+//   progress bar.
 // - If the stream hasn't started, drops out or the YoloBox restarts, it keeps
 //   retrying every few seconds, so viewers never have to refresh.
 // - Every minute it asks the server whether this page is still live; once
@@ -88,7 +89,11 @@
         levelLoadingMaxRetry: 4,
         fragLoadingMaxRetry: 6,
       });
-      hls.on(window.Hls.Events.MANIFEST_PARSED, tryPlay);
+      hls.on(window.Hls.Events.MANIFEST_PARSED, function () {
+        onLevels();
+        tryPlay();
+      });
+      hls.on(window.Hls.Events.LEVEL_SWITCHED, updateQuality);
       hls.on(window.Hls.Events.ERROR, function (_e, data) {
         if (data && data.fatal) failed(url);
       });
@@ -248,7 +253,16 @@
   vol.step = "0.05";
   vol.setAttribute("aria-label", "Volume");
   var fullBtn = el("button", "lp-btn", ICONS.full, "Full screen");
-  [playBtn, backBtn, liveBtn, behindText, el("span", "lp-spacer"), muteBtn, vol, fullBtn].forEach(function (c) {
+  var qWrap = el("div", "lp-q");
+  var qBtn = el("button", "lp-qbtn", "Auto", "Quality");
+  qBtn.setAttribute("aria-haspopup", "menu");
+  var qMenu = el("div", "lp-qmenu");
+  qMenu.setAttribute("role", "menu");
+  qMenu.hidden = true;
+  qWrap.hidden = true;
+  qWrap.appendChild(qMenu);
+  qWrap.appendChild(qBtn);
+  [playBtn, backBtn, liveBtn, behindText, el("span", "lp-spacer"), qWrap, muteBtn, vol, fullBtn].forEach(function (c) {
     bar.appendChild(c);
   });
   wrap.appendChild(big);
@@ -285,6 +299,75 @@
     fullBtn.title = fs ? "Exit full screen" : "Full screen";
     fullBtn.setAttribute("aria-label", fullBtn.title);
   }
+
+  // ---- quality menu (hls.js only; iPhones choose the quality themselves)
+  var chosenHeight = null; // null = Auto; kept when the player reconnects
+
+  function levelName(l) {
+    return l.height ? l.height + "p" : Math.round(l.bitrate / 1000) + " kbit/s";
+  }
+
+  function onLevels() {
+    if (!qWrap || !hls) return;
+    var levels = hls.levels || [];
+    if (chosenHeight !== null) {
+      for (var i = 0; i < levels.length; i++) if (levels[i].height === chosenHeight) hls.nextLevel = i;
+    }
+    buildMenu();
+    updateQuality();
+  }
+
+  function buildMenu() {
+    qMenu.innerHTML = "";
+    var levels = (hls && hls.levels) || [];
+    var items = [{ label: "Auto", idx: -1, h: Infinity }];
+    levels.forEach(function (l, i) {
+      items.push({ label: levelName(l) + (l.height >= 720 ? " HD" : ""), idx: i, h: l.height || 0 });
+    });
+    items.sort(function (a, b) {
+      return b.h - a.h;
+    });
+    items.forEach(function (it) {
+      var b = el("button", "lp-qitem", it.label);
+      b.setAttribute("role", "menuitemradio");
+      var on = it.idx === -1 ? chosenHeight === null : levels[it.idx].height === chosenHeight;
+      b.setAttribute("aria-checked", on ? "true" : "false");
+      b.addEventListener("click", function () {
+        pickLevel(it.idx);
+        qMenu.hidden = true;
+      });
+      qMenu.appendChild(b);
+    });
+  }
+
+  function pickLevel(idx) {
+    if (!hls) return;
+    chosenHeight = idx === -1 ? null : hls.levels[idx].height;
+    hls.nextLevel = idx; // -1 = Auto; switches at the next piece without stopping
+    buildMenu();
+    updateQuality();
+  }
+
+  function updateQuality() {
+    if (!qWrap) return;
+    var levels = (hls && hls.levels) || [];
+    qWrap.hidden = levels.length < 2;
+    if (levels.length < 2) {
+      qMenu.hidden = true;
+      return;
+    }
+    var now = hls.currentLevel >= 0 && levels[hls.currentLevel] ? levelName(levels[hls.currentLevel]) : "";
+    qBtn.innerHTML = chosenHeight === null ? 'Auto<span class="lp-qnow">' + (now ? " \u00b7 " + now : "") + "</span>" : now || chosenHeight + "p";
+  }
+
+  qBtn.addEventListener("click", function (e) {
+    e.stopPropagation();
+    if (qMenu.hidden) buildMenu();
+    qMenu.hidden = !qMenu.hidden;
+  });
+  document.addEventListener("click", function (e) {
+    if (!qWrap.contains(e.target)) qMenu.hidden = true;
+  });
 
   function togglePlay() {
     if (video.paused) video.play().catch(function () {});
@@ -358,7 +441,7 @@
     wrap.classList.remove("lp-idle");
     clearTimeout(idleTimer);
     idleTimer = setTimeout(function () {
-      if (!video.paused && !keyboardFocusInBar()) wrap.classList.add("lp-idle");
+      if (!video.paused && !keyboardFocusInBar() && qMenu.hidden) wrap.classList.add("lp-idle");
     }, 3000);
   }
   ["pointermove", "pointerdown", "keydown", "focusin"].forEach(function (ev) {
@@ -395,6 +478,7 @@
   window.orangeLivePlayer = {
     get hls() { return hls; },
     get url() { return current; },
+    pickLevel: pickLevel,
     behindLive: behindLive,
   };
 

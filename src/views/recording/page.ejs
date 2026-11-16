@@ -39,7 +39,7 @@
     <% parts.forEach(p => { %>
       <div class="recording-part">
         <% if (parts.length > 1) { %><h2>Part <%= p.part %></h2><% } %>
-        <video controls playsinline preload="metadata" src="<%= p.src %>"></video>
+        <video controls playsinline preload="metadata"<% if (stream.slide_at) { %> poster="/watch/<%= stream.slug %>/slide.jpg?v=<%= encodeURIComponent(stream.slide_at) %>"<% } %> src="<%= p.src %>"></video>
         <a class="btn" href="/recording/<%= token %>/download/<%= p.id %>">Download<%= parts.length > 1 ? ` part ${p.part}` : "" %> (<%= p.size %>)</a>
       </div>
     <% }) %>
