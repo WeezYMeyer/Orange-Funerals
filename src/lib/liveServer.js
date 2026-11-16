@@ -161,6 +161,13 @@ async function readRange(key, start, end) {
   return Buffer.from(await res.Body.transformToByteArray());
 }
 
+// A short-lived private link to the file (used by ffmpeg to grab a thumbnail).
+async function signedGetUrl(key, seconds = 600) {
+  const { GetObjectCommand } = require("@aws-sdk/client-s3");
+  const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
+  return getSignedUrl(s3(), new GetObjectCommand({ Bucket: bucket(), Key: key }), { expiresIn: seconds });
+}
+
 // A one-hour link that downloads the file with a friendly name.
 async function downloadUrl(key, filename) {
   const { GetObjectCommand } = require("@aws-sdk/client-s3");
@@ -239,6 +246,7 @@ module.exports = {
   listKitRecordings,
   deleteRecordings,
   readRange,
+  signedGetUrl,
   downloadUrl,
   startTimeFromKey,
   serviceDateToUtc,

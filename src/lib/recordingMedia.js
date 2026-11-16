@@ -3,10 +3,14 @@
 //   - the first ~0.5 MB (file header) + the last ~3 MB give the exact length
 //   - ~8 MB from part-way through gives one picture, made by ffmpeg
 //
-// The live server records fragmented MP4 (MediaMTX "fmp4"): a header (moov)
-// followed by ~1-second fragments (moof + mdat). Each fragment says when it
-// starts (tfdt) and how long its samples are (trun), so the last fragment
-// tells us where the recording ends.
+// Two kinds of file:
+//  - "faststart" MP4 (from Nov 2026 the live server rewrites every recording
+//    this way): the index (moov) is at the front and holds the length, and
+//    ffmpeg jumps straight to the right spot over a private S3 link.
+//  - fragmented MP4 (MediaMTX "fmp4", older recordings): a header followed by
+//    ~1-second fragments (moof + mdat). Each fragment says when it starts
+//    (tfdt) and how long its samples are (trun), so the last fragment tells
+//    us where the recording ends, and a picture is made from one piece.
 //
 // ffmpeg comes from the optional "ffmpeg-static" package (installed by npm on
 // Render), or FFMPEG_PATH, or an ffmpeg on the PATH. Without it the length is
@@ -72,9 +76,11 @@ function parseMoov(buf, moov) {
     const hdlr = mdia && child(buf, mdia, "hdlr");
     if (!tkhd || !mdhd) continue;
     const id = buf.readUInt32BE(tkhd.body + (buf[tkhd.body] === 1 ? 20 : 12));
-    const timescale = buf.readUInt32BE(mdhd.body + (buf[mdhd.body] === 1 ? 20 : 12));
+    const v1 = buf[mdhd.body] === 1;
+    const timescale = buf.readUInt32BE(mdhd.body + (v1 ? 20 : 12));
+    const mediaDuration = v1 ? Number(buf.readBigUInt64BE(mdhd.body + 24)) : buf.readUInt32BE(mdhd.body + 16);
     const handler = hdlr ? buf.toString("latin1", hdlr.body + 8, hdlr.body + 12) : "";
-    tracks.set(id, { timescale, handler, defDuration: 0, defFlags: 0 });
+    tracks.set(id, { timescale, mediaDuration, handler, defDuration: 0, defFlags: 0 });
   }
   const mvex = child(buf, moov, "mvex");
   if (mvex) {
@@ -89,7 +95,7 @@ function parseMoov(buf, moov) {
   let videoId = null;
   for (const [id, t] of tracks) if (t.handler === "vide" && videoId === null) videoId = id;
   if (videoId === null && tracks.size) videoId = tracks.keys().next().value;
-  return { tracks, videoId };
+  return { tracks, videoId, fragmented: Boolean(mvex) };
 }
 
 // moof -> Map(trackId -> { start, duration, firstIsKeyframe })   (in track time units)
@@ -175,6 +181,10 @@ async function readHeader(key, size) {
   if (!moov || moov.end > head.length) throw new Error("not a recording the library can read (no MP4 header)");
   const info = parseMoov(head, moov);
   if (info.videoId === null) throw new Error("no video in the recording");
+  if (!info.fragmented) {
+    const v = info.tracks.get(info.videoId);
+    return { ...info, durationSec: v.timescale ? v.mediaDuration / v.timescale : null };
+  }
   const init = head.subarray(0, moov.end);
   const first = findMoofs(head, moov.end)[0];
   const firstStart = first ? (parseMoof(head, first, info.tracks).get(info.videoId) || {}).start || 0 : 0;
@@ -183,6 +193,10 @@ async function readHeader(key, size) {
 
 // Length of the recording in seconds.
 async function durationOf(key, size, header) {
+  if (!header.fragmented) {
+    if (header.durationSec === null || !Number.isFinite(header.durationSec)) throw new Error("the recording has no length");
+    return header.durationSec;
+  }
   const from = Math.max(0, size - TAIL_BYTES);
   const tail = await live.readRange(key, from, size - 1);
   const moofs = findMoofs(tail);
@@ -207,14 +221,19 @@ function ffmpegPath() {
   return "ffmpeg";
 }
 
-// One JPEG (640 px wide) from MP4 bytes on stdin.
+// One JPEG (640 px wide), from MP4 bytes on stdin (input = Buffer) or from a
+// link ffmpeg reads itself (input = { url, seek } - it only fetches the index
+// and the few seconds it needs).
 function frameToJpeg(input) {
   return new Promise((resolve, reject) => {
+    const source = Buffer.isBuffer(input)
+      ? ["-f", "mp4", "-i", "pipe:0"]
+      : ["-ss", String(Math.max(0, input.seek || 0)), "-i", input.url];
     let proc;
     try {
       proc = spawn(ffmpegPath(), [
         "-hide_banner", "-loglevel", "error",
-        "-f", "mp4", "-i", "pipe:0",
+        ...source,
         "-map", "0:v:0", "-frames:v", "1",
         "-vf", "scale=640:-2", "-q:v", "4",
         "-f", "image2", "-c:v", "mjpeg", "pipe:1",
@@ -238,12 +257,16 @@ function frameToJpeg(input) {
       reject(new Error(`ffmpeg could not make a picture (${code}): ${errText.trim().slice(0, 200)}`));
     });
     proc.stdin.on("error", () => {}); // ffmpeg stops reading once it has its picture
-    proc.stdin.end(input);
+    proc.stdin.end(Buffer.isBuffer(input) ? input : undefined);
   });
 }
 
 // A picture from `position` (0..1) of the way through the file.
 async function thumbnailAt(key, size, header, position) {
+  if (!header.fragmented) {
+    const url = await live.signedGetUrl(key, 600);
+    return frameToJpeg({ url, seek: (header.durationSec || 0) * position });
+  }
   const start = Math.max(header.init.length, Math.floor(size * position));
   const end = Math.min(size - 1, start + SAMPLE_BYTES - 1);
   const piece = await live.readRange(key, start, end);
