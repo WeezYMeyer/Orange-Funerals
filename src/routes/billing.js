@@ -922,7 +922,12 @@ const SETTING_FIELDS = [
 ];
 
 router.get("/settings", (req, res) => {
-  res.render("admin/settings", { s: getSettings(), notice: req.query.notice || null, crm: crm.status() });
+  res.render("admin/settings", {
+    s: getSettings(),
+    notice: req.query.notice || null,
+    crm: crm.status(),
+    live: require("../lib/liveJobs").status(),
+  });
 });
 
 // Send every contact to the Orange Platform CRM again (e.g. after fixing the settings).

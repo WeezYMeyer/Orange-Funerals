@@ -3,7 +3,9 @@ const bcrypt = require("bcryptjs");
 const db = require("../lib/db");
 const { requireStaff } = require("../lib/auth");
 const { makeUniqueSlug } = require("../lib/slug");
-const { sendThankYouEmails, sendBroadcast } = require("../lib/emailService");
+const { sendThankYouEmails, sendBroadcast, sendFamilyRecordingEmail } = require("../lib/emailService");
+const liveJobs = require("../lib/liveJobs");
+const live = require("../lib/liveServer");
 const msg = require("../lib/crewMessages");
 const crm = require("../lib/crmSync");
 
@@ -89,6 +91,8 @@ function readStreamForm(body) {
     mapsLink: clean(body.mapsLink),
     contactName: clean(body.contactName),
     contactPhone: clean(body.contactPhone),
+    familyName: clean(body.familyName).slice(0, 120),
+    familyEmail: clean(body.familyEmail).toLowerCase().slice(0, 200),
     arrivalTime: clean(body.arrivalTime),
     crewNotes: clean(body.crewNotes),
     kitId: body.kitId ? parseInt(body.kitId, 10) || null : null,
@@ -110,6 +114,7 @@ function readStreamForm(body) {
   let error = null;
   if (missing.length) error = `Please fill in: ${missing.join(", ")}.`;
   else if (!/^https?:\/\//i.test(f.mapsLink)) error = "The Google Maps link should start with https:// — copy it from Google Maps' Share button.";
+  else if (f.familyEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.familyEmail)) error = "The family email doesn't look right — please check it.";
   return { f, error };
 }
 
@@ -119,6 +124,18 @@ function streamFormValues(f) {
     f.crewNotes || null, f.kitId, f.leadSource || null,
     f.gear.length ? JSON.stringify(f.gear) : null, f.branch, f.chatEnabled, f.accountClient || null,
     f.accountClient ? f.lateName || null : null, f.accountClient ? f.bbNumber || null : null];
+}
+
+// Family contact for the recording email (Orange live server). If the
+// family email changes after it was already sent, the new address gets it
+// on the next automatic run.
+function saveFamily(streamId, f) {
+  const before = db.prepare("SELECT family_email FROM streams WHERE id = ?").get(streamId) || {};
+  const changed = (before.family_email || "") !== (f.familyEmail || "");
+  db.prepare(
+    `UPDATE streams SET family_name = ?, family_email = ?${changed ? ", family_emailed_at = NULL, family_reminded_at = NULL" : ""} WHERE id = ?`
+  ).run(f.familyName || null, f.familyEmail || null, streamId);
+  if (changed) liveJobs.forgetEmailAttempts(streamId);
 }
 
 // Other funerals on the same day using the same kit.
@@ -235,7 +252,10 @@ router.post("/streams/new", (req, res) => {
   ).run(...streamFormValues(f), slug, req.session.staffId);
 
   const created = db.prepare("SELECT id FROM streams WHERE slug = ?").get(slug);
-  if (created) billing.syncDocsForStream(created.id);
+  if (created) {
+    saveFamily(created.id, f);
+    billing.syncDocsForStream(created.id);
+  }
   res.redirect(`/admin/streams/${slug}`);
 });
 
@@ -308,8 +328,28 @@ router.get("/streams/:slug", (req, res) => {
     )
     .all(stream.id);
 
+  // Orange live server status for this funeral (null for YoloLive funerals).
+  let liveInfo = null;
+  if (liveJobs.isOwnStream(stream)) {
+    const current = liveJobs.currentStreamForKit(stream.kit_id);
+    const ks = liveJobs.kitStatus(stream.kit_id);
+    const parts = db.prepare("SELECT * FROM recordings WHERE stream_id = ? ORDER BY part").all(stream.id);
+    liveInfo = {
+      isCurrent: Boolean(current && current.id === stream.id),
+      kitLive: Boolean(ks && ks.is_live),
+      checkedAt: ks ? ks.checked_at : null,
+      streamName: live.streamNameForKit(stream.kit_id),
+      parts: parts.map((p) => ({ ...p, sizeText: live.fmtSize(p.size_bytes) })),
+      totalSize: live.fmtSize(parts.reduce((a, p) => a + (p.size_bytes || 0), 0)),
+      expires: live.fmtSastDate(live.dbDate(stream.recording_expires_at)),
+      familyPage: stream.recording_token ? `${process.env.BASE_URL || "http://localhost:3000"}/recording/${stream.recording_token}` : null,
+      downloads: parts.reduce((a, p) => a + (p.downloads || 0), 0),
+    };
+  }
+
   res.render("admin/stream-detail", {
     stream,
+    liveInfo,
     viewers,
     publicUrl,
     status,
@@ -343,6 +383,9 @@ router.post("/streams/:slug/end", (req, res) => {
   if (!stream) return res.status(404).send("Stream not found");
   if (!stream.ended_at) {
     db.prepare("UPDATE streams SET ended_at = datetime('now') WHERE id = ?").run(stream.id);
+    if (liveJobs.isOwnStream(stream)) {
+      db.prepare("UPDATE streams SET recording_status = 'waiting' WHERE id = ?").run(stream.id);
+    }
   }
   res.redirect(`/admin/streams/${stream.slug}?notice=ended#after`);
 });
@@ -394,6 +437,20 @@ router.post("/streams/:slug/resend-thanks", async (req, res) => {
   res.redirect(`/admin/streams/${stream.slug}?notice=${notice}`);
 });
 
+// Orange live server: (re)send the recording email to the family now.
+router.post("/streams/:slug/family-email", async (req, res) => {
+  const stream = db.prepare("SELECT * FROM streams WHERE slug = ?").get(req.params.slug);
+  if (!stream) return res.status(404).send("Stream not found");
+  let notice;
+  try {
+    const r = await sendFamilyRecordingEmail(stream.id, { reminder: false });
+    notice = r.ok ? "family-sent" : `family-error-${encodeURIComponent(r.error || "failed")}`;
+  } catch (err) {
+    notice = `family-error-${encodeURIComponent(err.message)}`;
+  }
+  res.redirect(`/admin/streams/${stream.slug}?notice=${notice}#emails`);
+});
+
 // --- Edit stream (title / embed code / date-time) ---
 // The slug never changes here, so a link you've already sent out keeps
 // working even after you update the embed code.
@@ -419,6 +476,7 @@ router.post("/streams/:slug/edit", (req, res) => {
        lead_source = ?, extra_gear = ?, branch = ?, chat_enabled = ?, account_client = ?, late_name = ?, bb_number = ?
      WHERE id = ?`
   ).run(...streamFormValues(f), stream.id);
+  saveFamily(stream.id, f);
   broadcastChatState(req, stream.slug, f.chatEnabled);
   billing.syncDocsForStream(stream.id); // gear changes flow into the quote/invoice
   // Moved to a funeral home: its unpaid quote/invoice is now billed to the funeral home.

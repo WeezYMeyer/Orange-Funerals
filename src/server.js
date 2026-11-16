@@ -54,6 +54,7 @@ app.get("/", (req, res) => res.redirect("/admin"));
 app.use("/admin", adminRoutes);
 app.use("/watch", watchRoutes);
 app.use("/unsubscribe", unsubscribeRoutes);
+app.use("/recording", require("./routes/recording")); // family recording page (Orange live server)
 app.use("/api", require("./routes/feed")); // calendar feed for Orange Platform
 
 app.use((req, res) => res.status(404).send("Not found"));
@@ -106,4 +107,5 @@ io.on("connection", (socket) => {
 server.listen(PORT, () => {
   console.log(`Funeral streams platform running at http://localhost:${PORT}`);
   require("./lib/crmSync").start(); // contacts → Orange Platform CRM, if switched on
+  require("./lib/liveJobs").start(); // Orange live server: recordings, family emails, expiry (if LIVE_CDN_URL is set)
 });

@@ -78,6 +78,43 @@ const groups = [
     </form>
   </div>
 
+  <% if (typeof live !== "undefined" && live) { %>
+  <div class="panel" id="live">
+    <h2 class="panel-title">Orange live server</h2>
+    <% if (!live.enabled) { %>
+      <p class="help">Off. Funerals use YoloLive embed codes. To switch it on, add the <strong>LIVE_…</strong> variables from the orange-live stack under Environment in Render.</p>
+    <% } else { %>
+      <p class="help">
+        On. A funeral with a kit and <strong>no</strong> YoloLive embed code plays that kit's YoloBox, records it, emails the family the recording, reminds them 3 days before it expires and deletes it after <strong><%= live.recordingDays %> days</strong>.
+      </p>
+      <% if (!live.s3Ready || !live.awsKeysSet) { %>
+        <div class="error-box">Recordings can't be found yet: add <strong>LIVE_RECORDINGS_BUCKET</strong>, <strong>LIVE_AWS_ACCESS_KEY_ID</strong> and <strong>LIVE_AWS_SECRET_ACCESS_KEY</strong> in Render.</div>
+      <% } %>
+      <% if (!live.passwordSet) { %>
+        <div class="error-box">Add <strong>LIVE_STREAM_PASSWORD</strong> in Render so the full stream keys show below.</div>
+      <% } %>
+      <p class="help">
+        Last check <%= live.lastTickAt ? new Date(live.lastTickAt).toLocaleString("en-ZA", { timeZone: "Africa/Johannesburg" }) : "— not yet" %>
+      </p>
+      <% if (live.lastError) { %><div class="error-box">Last problem (<%= new Date(live.lastErrorAt).toLocaleString("en-ZA", { timeZone: "Africa/Johannesburg" }) %>): <%= live.lastError %></div><% } %>
+
+      <h3 style="margin:18px 0 6px; font-size:15px;">YoloBox settings (Custom RTMP) — enter once per kit</h3>
+      <label>RTMP URL (the same for every kit)</label>
+      <code class="kit-key"><%= live.rtmpUrl || "LIVE_RTMP_URL not set" %></code>
+      <% live.kits.forEach(k => { %>
+        <div style="margin-top:14px;">
+          <strong><%= k.name %></strong>
+          <% if (k.is_live) { %><span class="tag live">Streaming</span><% } else if (k.checked_at) { %><span class="tag">Off</span><% } %>
+          · <a href="<%= k.testUrl %>" target="_blank">Test player</a>
+          <label style="margin-top:4px;">Stream key</label>
+          <code class="kit-key"><%= k.streamKey %></code>
+        </div>
+      <% }) %>
+      <p class="help">Recommended YoloBox video: 720p, 25 fps, about 2.5 Mbps.</p>
+    <% } %>
+  </div>
+  <% } %>
+
   <% if (typeof crm !== "undefined" && crm) { %>
   <div class="panel" id="crm">
     <h2 class="panel-title">Orange Platform CRM</h2>

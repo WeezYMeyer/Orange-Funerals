@@ -81,9 +81,10 @@ const REWATCH_DAYS = 28;
 
 // ended_at is stored by SQLite in UTC ("YYYY-MM-DD HH:MM:SS"); show the
 // date in South African time.
-function rewatchUntil(endedAt) {
+function rewatchUntil(endedAt, untilDate) {
   const ended = endedAt ? new Date(endedAt.replace(" ", "T") + "Z") : new Date();
-  const until = new Date(ended.getTime() + REWATCH_DAYS * 24 * 60 * 60 * 1000);
+  // Own live server: the real expiry date of the recording is known.
+  const until = untilDate || new Date(ended.getTime() + REWATCH_DAYS * 24 * 60 * 60 * 1000);
   return until.toLocaleDateString("en-ZA", {
     timeZone: "Africa/Johannesburg",
     weekday: "long",
@@ -93,9 +94,9 @@ function rewatchUntil(endedAt) {
   });
 }
 
-function thankYouEmail({ contactName, streamTitle, watchUrl, endedAt, unsubToken }) {
+function thankYouEmail({ contactName, streamTitle, watchUrl, endedAt, untilDate, unsubToken }) {
   const greeting = contactName ? `Dear ${esc(contactName)},` : "Dear friend,";
-  const until = esc(rewatchUntil(endedAt));
+  const until = esc(rewatchUntil(endedAt, untilDate));
   const url = esc(watchUrl);
   return wrapper({
     heading: "Thank you for watching",
@@ -138,4 +139,66 @@ function broadcastEmail({ contactName, subjectLine, messageHtml, unsubToken }) {
   });
 }
 
-module.exports = { thankYouEmail, broadcastEmail };
+
+// A green call-to-action box, same look as the thank-you email.
+function buttonBox({ title, url, label, note }) {
+  const u = esc(url);
+  return `
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top: 28px; border-collapse: collapse;">
+        <tr>
+          <td style="background: #f4f6f2; border: 1px solid #dde4d6; border-radius: 6px; padding: 20px 22px; text-align: center;">
+            <div style="font-size: 15px; color: #2b2b2b; margin-bottom: 14px;">${esc(title)}</div>
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="border-collapse: collapse; margin: 0 auto;">
+              <tr>
+                <td style="background: #5b6b5b; border-radius: 6px;">
+                  <a href="${u}" style="display: inline-block; padding: 11px 26px; font-family: Arial, sans-serif; font-size: 14px; font-weight: bold; color: #ffffff; text-decoration: none;">${esc(label)}</a>
+                </td>
+              </tr>
+            </table>
+            <div style="font-family: Arial, sans-serif; font-size: 12px; color: #6b6b6b; margin-top: 12px; word-break: break-all;">
+              <a href="${u}" style="color: #46543f;">${u}</a><br/>
+              ${esc(note)}
+            </div>
+          </td>
+        </tr>
+      </table>`;
+}
+
+// To the family, a few minutes after the service: thank you + the recording.
+function familyRecordingEmail({ contactName, streamTitle, pageUrl, until, parts, unsubToken }) {
+  const greeting = contactName ? `Dear ${esc(contactName)},` : "Dear family,";
+  const partsNote =
+    parts > 1
+      ? `<p>The livestream was restarted during the service, so the recording is in <strong>${parts} parts</strong>. You'll find all of them on the page, in order.</p>`
+      : "";
+  return wrapper({
+    heading: "The recording of the service",
+    unsubToken,
+    bodyHtml: `
+      <p>${greeting}</p>
+      <p>Thank you for allowing us to stream <strong>${esc(streamTitle)}</strong>. We hope it helped family and friends who could not be there to be part of the day.</p>
+      <p>The recording of the service is ready. You can watch it online, or download it to keep and share. It will be available until <strong>${esc(until)}</strong>; after that date it is permanently removed, so please download it before then.</p>
+      ${partsNote}
+      <p>With heartfelt sympathy,<br/>${esc(FROM_NAME())}</p>
+      ${buttonBox({ title: "Watch or download the recording", url: pageUrl, label: "Open the recording", note: `Available until ${until}` })}
+    `,
+  });
+}
+
+// To the family, a few days before the recording is removed.
+function familyReminderEmail({ contactName, streamTitle, pageUrl, until, unsubToken }) {
+  const greeting = contactName ? `Dear ${esc(contactName)},` : "Dear family,";
+  return wrapper({
+    heading: "A reminder about the recording",
+    unsubToken,
+    bodyHtml: `
+      <p>${greeting}</p>
+      <p>This is a gentle reminder that the recording of <strong>${esc(streamTitle)}</strong> will be removed on <strong>${esc(until)}</strong>.</p>
+      <p>If you would like to keep it, please download it before then. Once it has been removed, we are not able to recover it.</p>
+      <p>With warm regards,<br/>${esc(FROM_NAME())}</p>
+      ${buttonBox({ title: "Download the recording", url: pageUrl, label: "Open the recording", note: `Removed after ${until}` })}
+    `,
+  });
+}
+
+module.exports = { thankYouEmail, broadcastEmail, familyRecordingEmail, familyReminderEmail };

@@ -10,7 +10,7 @@
 
   <label for="embedCode">YoloLive embed code <span class="legend-note">optional — can be added later</span></label>
   <textarea id="embedCode" name="embedCode" class="short" placeholder="<iframe src=&quot;https://...&quot; ...></iframe>"><%= f.embedCode || '' %></textarea>
-  <p class="help">Paste the full snippet YoloLive gives you, exactly as copied. Leave it empty to save the funeral now — viewers will see "the livestream will appear here" until you add it under <strong>Edit</strong>.</p>
+  <p class="help">Only for funerals streamed through YoloLive: paste the full snippet exactly as copied. <strong>Leave it empty for the Orange live server</strong> — the page then plays the YoloBox of the kit chosen below, automatically.</p>
 
   <label class="pick check-row">
     <input type="hidden" name="chatEnabled" value="0" />
@@ -55,6 +55,18 @@
       <input type="tel" id="contactPhone" name="contactPhone" placeholder="082 123 4567" value="<%= f.contactPhone || '' %>" />
     </div>
   </div>
+
+  <div class="grid-2">
+    <div>
+      <label for="familyName">Family contact for the recording</label>
+      <input type="text" id="familyName" name="familyName" placeholder="e.g. Anna Botha" value="<%= f.familyName || '' %>" />
+    </div>
+    <div>
+      <label for="familyEmail">Family email for the recording</label>
+      <input type="email" id="familyEmail" name="familyEmail" placeholder="anna@example.com" value="<%= f.familyEmail || '' %>" />
+    </div>
+  </div>
+  <p class="help">On the Orange live server, this person automatically gets the recording download link a few minutes after the service, and a reminder before it is removed. You can add it later too.</p>
 
   <div class="grid-2">
     <div>

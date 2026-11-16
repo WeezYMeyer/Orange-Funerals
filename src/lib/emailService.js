@@ -1,6 +1,7 @@
 const db = require("./db");
 const { sendEmail } = require("./mailer");
-const { thankYouEmail, broadcastEmail } = require("./emailTemplates");
+const { nanoid } = require("nanoid");
+const { thankYouEmail, broadcastEmail, familyRecordingEmail, familyReminderEmail } = require("./emailTemplates");
 
 /**
  * Send the "thank you for watching" email to every contact who watched a
@@ -57,6 +58,7 @@ async function sendThankYouEmails(streamId) {
       streamTitle: stream.title,
       watchUrl: `${process.env.BASE_URL || "http://localhost:3000"}/watch/${stream.slug}`,
       endedAt: stream.ended_at,
+      untilDate: stream.recording_expires_at ? new Date(stream.recording_expires_at) : null,
       unsubToken: contact.unsub_token,
     });
     const result = await sendEmail({ to: { email: contact.email, name: contact.name || undefined }, subject, html });
@@ -104,4 +106,65 @@ async function sendBroadcast({ subjectLine, messageHtml }) {
   return { sent, failed, total: contacts.length };
 }
 
-module.exports = { sendThankYouEmails, sendBroadcast };
+
+/**
+ * Email the family the link to the recording page (or, with reminder: true,
+ * the "it will be removed on ..." reminder). Used automatically by
+ * lib/liveJobs.js and by the "Send to family" button on the funeral page.
+ * The family is added to contacts so the email has a working unsubscribe link.
+ */
+async function sendFamilyRecordingEmail(streamId, { reminder = false } = {}) {
+  const stream = db.prepare("SELECT * FROM streams WHERE id = ?").get(streamId);
+  if (!stream) throw new Error("Stream not found");
+  const email = String(stream.family_email || "").trim().toLowerCase();
+  if (!email) return { ok: false, skipped: true, error: "No family email on this funeral" };
+  if (stream.recording_status !== "ready" || !stream.recording_token) {
+    return { ok: false, skipped: true, error: "The recording isn't ready yet" };
+  }
+
+  let contact = db.prepare("SELECT * FROM contacts WHERE email = ?").get(email);
+  if (!contact) {
+    const info = db
+      .prepare("INSERT INTO contacts (email, name, unsub_token) VALUES (?, ?, ?)")
+      .run(email, stream.family_name || null, nanoid(24));
+    contact = db.prepare("SELECT * FROM contacts WHERE id = ?").get(info.lastInsertRowid);
+    try {
+      require("./crmSync").enqueue(email);
+    } catch {}
+  }
+
+  const parts = db
+    .prepare("SELECT COUNT(*) AS n FROM recordings WHERE stream_id = ? AND deleted_at IS NULL")
+    .get(stream.id).n;
+  const until = new Date(stream.recording_expires_at).toLocaleDateString("en-ZA", {
+    timeZone: "Africa/Johannesburg",
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+  const pageUrl = `${process.env.BASE_URL || "http://localhost:3000"}/recording/${stream.recording_token}`;
+  const name = stream.family_name || contact.name;
+  const html = reminder
+    ? familyReminderEmail({ contactName: name, streamTitle: stream.title, pageUrl, until, unsubToken: contact.unsub_token })
+    : familyRecordingEmail({ contactName: name, streamTitle: stream.title, pageUrl, until, parts, unsubToken: contact.unsub_token });
+  const subject = reminder
+    ? `Reminder: the recording of ${stream.title} will be removed on ${until}`
+    : `The recording of ${stream.title}`;
+
+  // The recording is what the family asked for, so it is sent even if they
+  // unsubscribed from general emails.
+  const result = await sendEmail({ to: { email, name: name || undefined }, subject, html });
+  db.prepare(
+    "INSERT INTO email_logs (contact_id, stream_id, kind, subject, status) VALUES (?, ?, ?, ?, ?)"
+  ).run(contact.id, stream.id, reminder ? "family_reminder" : "family_recording", subject, result.ok ? "sent" : "failed");
+  if (result.ok) {
+    db.prepare(`UPDATE streams SET ${reminder ? "family_reminded_at" : "family_emailed_at"} = ? WHERE id = ?`).run(
+      new Date().toISOString(),
+      stream.id
+    );
+  }
+  return result;
+}
+
+module.exports = { sendThankYouEmails, sendBroadcast, sendFamilyRecordingEmail };

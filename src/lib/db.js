@@ -335,6 +335,54 @@ for (const name of ["Kit 1", "Kit 2", "Kit 3"]) {
   db.prepare("INSERT OR IGNORE INTO kits (name) VALUES (?)").run(name);
 }
 
+// --- Own live server (AWS) + automatic recordings (added Nov 2026) ---
+// Each kit's YoloBox streams to the Orange live server with a fixed key
+// (live/kit<id>). After End Stream the recordings for that kit are found in
+// S3, the family gets a download link, a reminder before it expires, and the
+// files are deleted on the expiry date. See lib/liveServer.js + lib/liveJobs.js.
+{
+  const existing = new Set(db.prepare("PRAGMA table_info(streams)").all().map((c) => c.name));
+  const cols = {
+    family_name: "TEXT",
+    family_email: "TEXT",
+    live_started_at: "TEXT",        // UTC, first time this funeral's kit was seen live
+    recording_status: "TEXT",       // NULL | waiting | ready | none | expired
+    recording_ready_at: "TEXT",     // UTC
+    recording_expires_at: "TEXT",   // UTC
+    recording_token: "TEXT",        // family download page /recording/<token>
+    family_emailed_at: "TEXT",      // UTC
+    family_reminded_at: "TEXT",     // UTC
+  };
+  for (const [name, type] of Object.entries(cols)) {
+    if (!existing.has(name)) db.exec(`ALTER TABLE streams ADD COLUMN ${name} ${type}`);
+  }
+}
+db.exec(`
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_streams_recording_token ON streams(recording_token);
+
+  -- One row per recorded file (a restart during the service makes a new part).
+  CREATE TABLE IF NOT EXISTS recordings (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    stream_id   INTEGER NOT NULL REFERENCES streams(id),
+    s3_key      TEXT NOT NULL UNIQUE,
+    size_bytes  INTEGER NOT NULL DEFAULT 0,
+    started_at  TEXT NOT NULL,               -- UTC ISO, from the file name
+    part        INTEGER NOT NULL DEFAULT 1,
+    downloads   INTEGER NOT NULL DEFAULT 0,
+    deleted_at  TEXT,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_recordings_stream ON recordings(stream_id);
+
+  -- Whether each kit is streaming right now, as last checked.
+  CREATE TABLE IF NOT EXISTS kit_status (
+    kit_id      INTEGER PRIMARY KEY REFERENCES kits(id),
+    is_live     INTEGER NOT NULL DEFAULT 0,
+    changed_at  TEXT NOT NULL,               -- UTC ISO, when is_live last changed
+    checked_at  TEXT NOT NULL                -- UTC ISO
+  );
+`);
+
 // Optional auto-bootstrap of a staff login from environment variables.
 //
 // This exists for hosts where you can't run an interactive `npm run setup`

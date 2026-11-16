@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex" />
+  <title>Recording — <%= stream.title %></title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+
+<div class="watch-hero">
+  <div class="eyebrow">In Loving Memory</div>
+  <h1><%= stream.title %></h1>
+  <% if (expired) { %>
+    <div class="subtitle">This recording is no longer available.</div>
+  <% } else { %>
+    <div class="subtitle">The recording of the service — available until <%= until %>.</div>
+  <% } %>
+</div>
+
+<div class="container recording-page">
+  <% if (expired) { %>
+    <div class="gate-panel">
+      <p>Recordings are kept for a limited time after the service and this one has now been removed. If you need help, please contact Orange Productions.</p>
+    </div>
+  <% } else if (!parts.length) { %>
+    <div class="gate-panel">
+      <p>The recording is being prepared. Please try this link again a little later.</p>
+    </div>
+  <% } else { %>
+    <p class="help">You can watch the recording here, or download it to keep and share. Please download it before <strong><%= until %></strong> — after that it is permanently removed.</p>
+    <% if (parts.length > 1) { %>
+      <p class="help">The livestream was restarted during the service, so the recording is in <%= parts.length %> parts, in order.</p>
+    <% } %>
+    <% parts.forEach(p => { %>
+      <div class="recording-part">
+        <% if (parts.length > 1) { %><h2>Part <%= p.part %></h2><% } %>
+        <video controls playsinline preload="metadata" src="<%= p.src %>"></video>
+        <a class="btn" href="/recording/<%= token %>/download/<%= p.id %>">Download<%= parts.length > 1 ? ` part ${p.part}` : "" %> (<%= p.size %>)</a>
+      </div>
+    <% }) %>
+  <% } %>
+</div>
+
+<footer class="site-footer">
+  Streamed by Orange Productions.
+</footer>
+
+</body>
+</html>

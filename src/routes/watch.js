@@ -2,14 +2,53 @@ const express = require("express");
 const { nanoid } = require("nanoid");
 const db = require("../lib/db");
 const crm = require("../lib/crmSync");
+const live = require("../lib/liveServer");
+const liveJobs = require("../lib/liveJobs");
 
 const router = express.Router();
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+
+// What the video area shows for funerals on the Orange live server (kit
+// assigned, no YoloLive embed code). Returns null for YoloLive funerals,
+// which keep using the pasted embed codes exactly as before.
+function playerFor(stream) {
+  if (!liveJobs.isOwnStream(stream)) return null;
+  if (!stream.ended_at) {
+    const current = liveJobs.currentStreamForKit(stream.kit_id);
+    if (current && current.id === stream.id) {
+      return { mode: "live", src: live.liveUrlForKit(stream.kit_id) };
+    }
+    return { mode: "notyet" };
+  }
+  if (stream.recording_status === "ready") {
+    const parts = db
+      .prepare("SELECT id, s3_key, part FROM recordings WHERE stream_id = ? AND deleted_at IS NULL ORDER BY part")
+      .all(stream.id)
+      .map((r) => ({ part: r.part, src: live.playbackUrl(r.s3_key) }));
+    if (parts.length) {
+      return { mode: "replay", parts, until: live.fmtSastDate(live.dbDate(stream.recording_expires_at)) };
+    }
+  }
+  if (stream.recording_status === "expired") return { mode: "expired" };
+  if (stream.recording_status === "none") return { mode: "norecording" };
+  return { mode: "processing" };
+}
+
 function isUnlocked(req, streamId) {
   return Boolean(req.session.unlockedStreams && req.session.unlockedStreams[streamId]);
 }
+
+// The live player asks every minute whether this page should still show the
+// live stream (it stops when staff press End Stream, so viewers never drift
+// into the next funeral on the same kit).
+router.get("/:slug/state", (req, res) => {
+  const stream = db.prepare("SELECT * FROM streams WHERE slug = ?").get(req.params.slug);
+  if (!stream) return res.status(404).json({ mode: "missing" });
+  const p = playerFor(stream);
+  res.set("Cache-Control", "no-store").json({ mode: p ? p.mode : "embed" });
+});
 
 router.get("/:slug", (req, res) => {
   const stream = db.prepare("SELECT * FROM streams WHERE slug = ?").get(req.params.slug);
@@ -18,6 +57,7 @@ router.get("/:slug", (req, res) => {
   const unlocked = isUnlocked(req, stream.id);
   res.render("watch/stream", {
     stream,
+    player: playerFor(stream),
     unlocked,
     error: null,
     viewerName: req.session.viewerName || "",
@@ -37,6 +77,7 @@ router.post("/:slug", (req, res) => {
   if (!EMAIL_RE.test(email)) {
     return res.render("watch/stream", {
       stream,
+      player: null,
       unlocked: false,
       error: "Please enter a valid email address.",
       viewerName: name,

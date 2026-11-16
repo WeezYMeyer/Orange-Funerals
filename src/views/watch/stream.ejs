@@ -26,7 +26,13 @@
     <div class="subtitle"><%= when %></div>
   <% } } %>
   <% if (stream.ended_at) { %>
-    <div class="subtitle" style="margin-top:6px;">This livestream has ended. Thank you for being with us — you can watch the recording below.</div>
+    <% if (player && (player.mode === "expired" || player.mode === "norecording")) { %>
+      <div class="subtitle" style="margin-top:6px;">This livestream has ended. Thank you for being with us.</div>
+    <% } else if (player && player.mode === "processing") { %>
+      <div class="subtitle" style="margin-top:6px;">This livestream has ended. Thank you for being with us — the recording will appear below shortly.</div>
+    <% } else { %>
+      <div class="subtitle" style="margin-top:6px;">This livestream has ended. Thank you for being with us — you can watch the recording below.</div>
+    <% } %>
   <% } %>
 </div>
 
@@ -58,16 +64,46 @@
   <% } else { %>
     <div class="stream-layout <%= stream.chat_enabled ? '' : 'no-chat' %>" id="stream-layout">
       <div class="video-wrap">
-        <% const playEmbed = (stream.ended_at && stream.recording_embed && stream.recording_embed.trim()) ? stream.recording_embed : stream.embed_code; %>
-        <% if (playEmbed && playEmbed.trim()) { %>
-          <%- playEmbed %>
-        <% } else { %>
-          <div class="video-pending">
+        <% if (player && player.mode === "live") { %>
+          <%# Orange live server: plays the kit's stream and reconnects by itself if it drops. %>
+          <video id="live-video" data-src="<%= player.src %>" data-state-url="/watch/<%= stream.slug %>/state" playsinline controls autoplay></video>
+          <div class="video-pending video-overlay" id="live-overlay">
             <div>
-              <strong>The livestream will appear here</strong>
-              <span>Please refresh this page closer to the start of the service.</span>
+              <strong>Waiting for the livestream</strong>
+              <span>It will start (or continue) here automatically — there's no need to refresh this page.</span>
             </div>
           </div>
+          <button type="button" class="sound-btn" id="sound-btn" hidden>Tap to turn the sound on</button>
+        <% } else if (player && player.mode === "replay") { %>
+          <video id="replay-video" playsinline controls preload="metadata" src="<%= player.parts[0].src %>"></video>
+        <% } else if (player) { %>
+          <%
+            const msgs = {
+              notyet: ["The livestream will appear here", "It starts on the day of the service. Please come back closer to the time."],
+              processing: ["The recording will appear here shortly", "It is usually ready within about 15 minutes after the service."],
+              expired: ["This recording is no longer available", "Recordings are kept for a limited time after the service."],
+              norecording: ["The recording is not available", "We're sorry — there is no recording of this service."],
+            };
+            const [title, sub] = msgs[player.mode] || msgs.notyet;
+          %>
+          <div class="video-pending">
+            <div>
+              <strong><%= title %></strong>
+              <span><%= sub %></span>
+            </div>
+          </div>
+        <% } else { %>
+          <% const playEmbed = (stream.ended_at && stream.recording_embed && stream.recording_embed.trim()) ? stream.recording_embed : stream.embed_code; %>
+          <% if (playEmbed && playEmbed.trim()) { %>
+            <%- playEmbed %>
+          <% } else { %>
+            <div class="video-pending">
+              <div>
+                <strong>The livestream will appear here</strong>
+                <span>Please refresh this page closer to the start of the service.</span>
+              </div>
+            </div>
+          <% } %>
         <% } %>
       </div>
       <div class="chat-wrap">
@@ -79,6 +115,17 @@
         </form>
       </div>
     </div>
+    <% if (player && player.mode === "replay") { %>
+      <div class="replay-info">
+        <% if (player.parts.length > 1) { %>
+          <span>The recording is in <%= player.parts.length %> parts:</span>
+          <% player.parts.forEach((p, i) => { %>
+            <button type="button" class="btn small <%= i === 0 ? '' : 'secondary' %> part-btn" data-src="<%= p.src %>">Part <%= p.part %></button>
+          <% }) %>
+        <% } %>
+        <% if (player.until) { %><span class="replay-until">Available until <%= player.until %></span><% } %>
+      </div>
+    <% } %>
   <% } %>
 </div>
 
@@ -93,6 +140,22 @@
     window.__VIEWER_NAME__ = <%- JSON.stringify(viewerName || "Guest").replace(/</g, "\\u003c") %>;
   </script>
   <script src="/js/chat.js"></script>
+  <% if (player && player.mode === "live") { %>
+    <script src="/js/hls.min.js"></script>
+    <script src="/js/live-player.js"></script>
+  <% } %>
+  <% if (player && player.mode === "replay" && player.parts.length > 1) { %>
+    <script>
+      document.querySelectorAll(".part-btn").forEach(function (b) {
+        b.addEventListener("click", function () {
+          var v = document.getElementById("replay-video");
+          v.src = b.getAttribute("data-src");
+          v.play().catch(function () {});
+          document.querySelectorAll(".part-btn").forEach(function (o) { o.classList.toggle("secondary", o !== b); });
+        });
+      });
+    </script>
+  <% } %>
 <% } %>
 
 </body>

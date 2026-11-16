@@ -9,8 +9,14 @@ if (notice === "already-sent") {
   noticeHtml = "Sending thank-you emails failed: " + decodeURIComponent(notice.replace("email-error-", "")) + " — check the email settings in Render.";
 } else if (notice === "updated") {
   noticeHtml = "Stream details updated. The public link is unchanged.";
+} else if (notice === "ended" && liveInfo) {
+  noticeHtml = "Stream ended. Once the YoloBox has stopped, the recording is emailed to the family and the thank-you emails go out automatically (usually within about 5 minutes).";
 } else if (notice === "ended") {
   noticeHtml = "Stream ended. Next: paste the recording embed code below, then send the thank-you emails.";
+} else if (notice === "family-sent") {
+  noticeHtml = "Recording email sent to the family.";
+} else if (notice && notice.startsWith("family-error-")) {
+  noticeHtml = "The family email was not sent: " + decodeURIComponent(notice.replace("family-error-", ""));
 } else if (notice === "recording-saved") {
   noticeHtml = "Recording saved — the watch link now plays the recording.";
 } else if (notice === "recording-removed") {
@@ -74,6 +80,22 @@ const scheduled = fmtScheduled(stream.service_date);
     <label>Status</label>
     <% if (stream.ended_at) { %>
       <p><span class="tag ended">Ended <%= new Date(stream.ended_at + "Z").toLocaleString() %></span></p>
+    <% } else if (liveInfo) { %>
+      <p><span class="tag live">Live / Open</span></p>
+      <p class="help" style="margin-top:0;">
+        Orange live server · <strong><%= kit ? kit.name : "Kit" %></strong> (stream key <code>live/<%= liveInfo.streamName %></code>) ·
+        <% if (!liveInfo.isCurrent) { %>
+          not on air yet — this page goes live on the day of the service, once any earlier funeral on this kit today has been ended.
+        <% } else if (liveInfo.kitLive) { %>
+          <span class="tag live">YoloBox is streaming</span>
+        <% } else { %>
+          the YoloBox is not streaming right now.
+        <% } %>
+      </p>
+      <form method="post" action="/admin/streams/<%= stream.slug %>/end" onsubmit="return confirm('End this stream? Only do this when the service is completely finished. A few minutes after the YoloBox stops, the recording is emailed to the family and the thank-you email goes to everyone who watched — automatically.');">
+        <button class="btn danger" type="submit">End Stream</button>
+      </form>
+      <p class="help">Press <strong>End Stream</strong> only when the service is completely finished. Until then the page stays open: if the stream drops or the YoloBox restarts, viewers reconnect by themselves. After End Stream, everything else is automatic.</p>
     <% } else { %>
       <p><span class="tag live">Live / Open</span></p>
       <form method="post" action="/admin/streams/<%= stream.slug %>/end" onsubmit="return confirm('End this stream? No emails are sent yet — you add the recording and send the thank-you emails on the Emails tab.');">
@@ -291,16 +313,74 @@ const scheduled = fmtScheduled(stream.service_date);
   </section>
 
   <section class="tab-pane" data-pane="emails">
-  <% if (!stream.ended_at) { %>
+  <% if (!stream.ended_at && liveInfo) { %>
+  <div class="panel">
+    <h2 class="panel-title">Recording &amp; emails</h2>
+    <p class="help">Automatic on the Orange live server: after <strong>End Stream</strong>, once the YoloBox has stopped, the recording is found, <%= stream.family_email ? `the family (${stream.family_email})` : "the family (add their email under Edit)" %> gets the download link, and everyone who watched gets the thank-you email.</p>
+  </div>
+  <% } else if (!stream.ended_at) { %>
   <div class="panel">
     <h2 class="panel-title">Thank-you emails</h2>
     <p class="help">Available after the service: press <strong>End Stream</strong> on the Link tab, add YoloLive's recording embed code here, then send the thank-you emails to everyone below.</p>
+  </div>
+  <% } %>
+  <% if (stream.ended_at && liveInfo) { %>
+  <div class="panel" id="recording">
+    <h2 class="panel-title">Recording</h2>
+    <%
+      const rs = stream.recording_status;
+      const recLabel = { waiting: "Waiting for the YoloBox to stop and the recording to upload", ready: "Ready", none: "No recording found", expired: "Expired and deleted" }[rs] || "Waiting";
+    %>
+    <p><span class="tag <%= rs === 'ready' ? 'email-sent' : (rs === 'none' ? 'email-failed' : '') %>"><%= recLabel %></span></p>
+    <% if (rs === "waiting" || !rs) { %>
+      <p class="help">Usually ready about 5 minutes after the YoloBox stops streaming. This page doesn't refresh by itself.</p>
+    <% } else if (rs === "none") { %>
+      <p class="help">The live server has no recording for <%= kit ? kit.name : "this kit" %> between the start of the service and End Stream. If YoloLive was used instead, paste its recording embed code below.</p>
+    <% } %>
+    <% if (liveInfo.parts.length) { %>
+      <table class="rec-parts">
+        <% liveInfo.parts.forEach(p => { %>
+          <tr>
+            <td>Part <%= p.part %></td>
+            <td><%= new Date(p.started_at).toLocaleString("en-ZA", { timeZone: "Africa/Johannesburg", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) %></td>
+            <td><%= p.sizeText %></td>
+            <td><%= p.deleted_at ? "deleted" : `${p.downloads} download${p.downloads === 1 ? "" : "s"}` %></td>
+          </tr>
+        <% }) %>
+      </table>
+    <% } %>
+    <% if (rs === "ready") { %>
+      <p class="help">Available to the family and on the watch link until <strong><%= liveInfo.expires %></strong>, then deleted automatically.</p>
+      <% if (liveInfo.familyPage) { %>
+        <label>Family recording page</label>
+        <div class="link-box"><a href="<%= liveInfo.familyPage %>" target="_blank"><%= liveInfo.familyPage %></a></div>
+      <% } %>
+      <label>Family email</label>
+      <% if (!stream.family_email) { %>
+        <p class="help">No family email on this funeral — add it under <a href="/admin/streams/<%= stream.slug %>/edit">Edit</a> and it is sent automatically within a few minutes.</p>
+      <% } else { %>
+        <p style="margin:6px 0;">
+          <% if (stream.family_emailed_at) { %>
+            <span class="tag email-sent">Sent to <%= stream.family_email %> · <%= new Date(stream.family_emailed_at).toLocaleString("en-ZA", { timeZone: "Africa/Johannesburg", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) %></span>
+          <% } else { %>
+            <span class="tag email-failed">Not sent yet to <%= stream.family_email %> — retries every 30 minutes</span>
+          <% } %>
+          <% if (stream.family_reminded_at) { %>
+            <span class="tag">Reminder sent <%= new Date(stream.family_reminded_at).toLocaleDateString("en-ZA", { timeZone: "Africa/Johannesburg", day: "numeric", month: "short" }) %></span>
+          <% } %>
+        </p>
+        <form method="post" action="/admin/streams/<%= stream.slug %>/family-email" onsubmit="return confirm('Send the recording email to <%= stream.family_email %> now?');">
+          <button class="btn small secondary" type="submit"><%= stream.family_emailed_at ? "Send it again" : "Send it now" %></button>
+        </form>
+      <% } %>
+    <% } %>
   </div>
   <% } %>
   <% if (stream.ended_at) { const hasRec = stream.recording_embed && stream.recording_embed.trim(); %>
   <div class="panel" id="after">
     <h2 class="panel-title">After the service</h2>
 
+    <% if (!liveInfo || stream.recording_status === "none") { %>
     <div class="step <%= hasRec ? 'done' : '' %>">
       <div class="step-num"><%= hasRec ? "✓" : "1" %></div>
       <div class="step-body">
@@ -316,6 +396,7 @@ const scheduled = fmtScheduled(stream.service_date);
         <p class="help"><%= hasRec ? "Watch page is showing the recording." : "Until you add it, the watch page keeps the live embed code." %></p>
       </div>
     </div>
+    <% } %>
 
     <div class="step <%= status === 'sent' ? 'done' : '' %>">
       <div class="step-num"><%= status === "sent" ? "✓" : "2" %></div>
