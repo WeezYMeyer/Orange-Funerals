@@ -271,7 +271,9 @@ A funeral uses it when it has a **kit** and **no YoloLive embed code**:
 - Each kit's YoloBox streams to the live server with a fixed key (Settings → *Orange live server* shows the RTMP URL and each kit's stream key). Enter it once per YoloBox.
 - The watch page plays that kit's stream on the day of the service, for the earliest funeral on that kit that hasn't been ended. If the stream drops or the YoloBox restarts, viewers reconnect by themselves.
 - Staff press **End Stream** only when the service is completely finished. A few minutes after the YoloBox stops, the recording is found in S3, the **family email** (on the funeral form) gets a private download page, and everyone who watched gets the thank-you email.
-- The family gets a reminder 3 days before the recording expires; on the expiry date (`RECORDING_DAYS`, default 28 days) it is deleted. The watch page plays the recording until then.
+- The family's link and the watch page play the recording for `RECORDING_DAYS` (default 28 days); the family gets a reminder 3 days before it closes.
+- **Recordings** (top menu, staff only) is a library of every recorded funeral: a thumbnail, length, client (funeral home), family, who streamed it and on which kit, viewers and downloads. Click a tile to watch it, download it or pick another thumbnail. Staff can watch them there for `LIBRARY_DAYS` (default 183 days ≈ 6 months); after that the video files are deleted automatically and the tile and details stay. The stack's `RecordingDays` clean-up (190) must stay longer than this.
+- Length and thumbnail are worked out a minute after the recording is ready, from small pieces of the file (not the whole file). The thumbnail needs ffmpeg, which npm installs on Render through the optional `ffmpeg-static` package; without it the library just shows plain tiles.
 - Funerals with a YoloLive embed code work exactly as before.
 
 Render → Environment (values from the `orange-live` CloudFormation stack Outputs):
@@ -284,6 +286,7 @@ Render → Environment (values from the `orange-live` CloudFormation stack Outpu
 | `LIVE_RECORDINGS_BUCKET` | Outputs → LiveRecordingsBucket |
 | `LIVE_AWS_REGION` | `af-south-1` |
 | `LIVE_AWS_ACCESS_KEY_ID` / `LIVE_AWS_SECRET_ACCESS_KEY` | access key of IAM user `orange-live-app` |
-| `RECORDING_DAYS` | optional, default 28 |
+| `RECORDING_DAYS` | optional, default 28 (family link + watch page) |
+| `LIBRARY_DAYS` | optional, default 183 (staff library, then deleted) |
 
-Code: `src/lib/liveServer.js` (AWS + live checks), `src/lib/liveJobs.js` (the 30-second background job), `src/routes/recording.js` (family page), `src/public/js/live-player.js`.
+Code: `src/lib/liveServer.js` (AWS + live checks), `src/lib/liveJobs.js` (the 30-second background job), `src/lib/recordingMedia.js` (length + thumbnail), `src/routes/recording.js` (family page), `src/routes/library.js` (Recordings library), `src/public/js/live-player.js`.
